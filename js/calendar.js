@@ -14,7 +14,6 @@ function quantityLabel(item) {
 }
 
 function compareItems(a, b) {
-  if (a.checked !== b.checked) return a.checked ? 1 : -1;
   return String(a.addedAt).localeCompare(String(b.addedAt));
 }
 
@@ -37,11 +36,8 @@ export function buildTripDetails(list) {
 
   for (const group of buckets.values()) group.sort(compareItems);
 
-  const picked = items.filter((item) => item.checked).length;
   const lines = [
-    `${list.name || 'Groceries'} — ${items.length} item${items.length === 1 ? '' : 's'}${
-      picked ? ` (${picked} picked)` : ''
-    }`,
+    `${list.name || 'Groceries'} — ${items.length} item${items.length === 1 ? '' : 's'}`,
     '',
   ];
 
@@ -55,15 +51,12 @@ export function buildTripDetails(list) {
       lines.push(aisle);
       for (const item of group) {
         const quantity = quantityLabel(item);
-        lines.push(
-          `${item.checked ? '[x]' : '[ ]'} ${item.name}${quantity ? ` — ${quantity}` : ''}`
-        );
+        lines.push(`${item.name}${quantity ? ` — ${quantity}` : ''}`);
       }
       lines.push('');
     }
   }
 
-  lines.push('From Grocery Planner');
   return lines.join('\n').trim();
 }
 

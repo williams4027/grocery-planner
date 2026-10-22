@@ -4,8 +4,16 @@
  * with a short debounce. Every mutation notifies subscribers synchronously.
  */
 
-import { STORAGE } from './config.js';
-import { createEmptyState, createItem, createList, normalizeState, nowIso } from './model.js';
+import { RECIPE_CATEGORIES, STORAGE } from './config.js';
+import {
+  createEmptyState,
+  createItem,
+  createList,
+  createRecipe,
+  normalizeState,
+  nowIso,
+} from './model.js';
+import { RECIPE_SEED_VERSION, SEED_RECIPES } from './seed-recipes.js';
 
 let state = createEmptyState();
 let ready = false;
@@ -15,6 +23,9 @@ let saveError = '';
 let database = null;
 
 const listeners = new Set();
+const RECIPE_CATEGORY_ORDER = new Map(
+  RECIPE_CATEGORIES.map((category, index) => [category, index])
+);
 let saveTimer = null;
 let saveChain = Promise.resolve();
 
@@ -77,6 +88,7 @@ export async function init() {
     }
   }
 
+  ensureRecipeSeed();
   ready = true;
   notify();
   scheduleSave();
@@ -129,6 +141,75 @@ export function addList({ name, storeKey = 'custom', aisleOrder = null } = {}) {
 
 export function visibleItems(list) {
   return list ? list.items.filter((item) => !item.deletedAt && item.name) : [];
+}
+
+export function visibleRecipes() {
+  return state.recipes
+    .filter((recipe) => !recipe.deletedAt && recipe.title)
+    .sort((a, b) => {
+      const categoryA = RECIPE_CATEGORY_ORDER.get(a.category) ?? RECIPE_CATEGORIES.length;
+      const categoryB = RECIPE_CATEGORY_ORDER.get(b.category) ?? RECIPE_CATEGORIES.length;
+      if (categoryA !== categoryB) return categoryA - categoryB;
+      return a.title.localeCompare(b.title);
+    });
+}
+
+export function getRecipe(recipeId) {
+  return state.recipes.find((recipe) => recipe.id === recipeId && !recipe.deletedAt) || null;
+}
+
+export function addRecipe(input) {
+  const recipe = createRecipe(input);
+  if (!recipe.title) return null;
+
+  state.recipes.push(recipe);
+  commit();
+  return recipe;
+}
+
+export function deleteRecipe(recipeId) {
+  const recipe = getRecipe(recipeId);
+  if (!recipe) return false;
+
+  recipe.deletedAt = nowIso();
+  recipe.updatedAt = recipe.deletedAt;
+  commit();
+  return true;
+}
+
+export function addRecipeToList(recipeId, listId) {
+  const recipe = getRecipe(recipeId);
+  const list = state.lists.find(
+    (entry) => entry.id === listId && !entry.archivedAt
+  );
+  if (!recipe || !list) return 0;
+
+  let count = 0;
+  for (const ingredient of recipe.ingredients) {
+    const item = createItem({
+      name: ingredient.name,
+      qty: ingredient.qty,
+      unit: ingredient.unit,
+      aisle: ingredient.aisle,
+      sourceRecipeId: recipe.id,
+    });
+
+    if (!item.name) continue;
+    list.items.push(item);
+    count += 1;
+  }
+
+  if (count) {
+    touchList(list);
+    commit();
+  }
+
+  return count;
+}
+
+export function addRecipeToActiveList(recipeId) {
+  const list = getActiveList();
+  return list ? addRecipeToList(recipeId, list.id) : 0;
 }
 
 export function getStorageInfo() {
@@ -200,6 +281,24 @@ export async function flush() {
 }
 
 /* ---------- Internals ---------- */
+
+function ensureRecipeSeed() {
+  const currentVersion = Number(state.settings.recipeSeedVersion) || 0;
+  if (currentVersion >= RECIPE_SEED_VERSION) return;
+
+  const existingKeys = new Set(
+    state.recipes.map((recipe) => recipe.seedKey).filter(Boolean)
+  );
+
+  for (const seed of SEED_RECIPES) {
+    if (!seed.seedKey || existingKeys.has(seed.seedKey)) continue;
+    state.recipes.push(createRecipe(seed));
+    existingKeys.add(seed.seedKey);
+  }
+
+  state.settings.recipeSeedVersion = RECIPE_SEED_VERSION;
+  state.updatedAt = nowIso();
+}
 
 function notify() {
   for (const listener of listeners) {

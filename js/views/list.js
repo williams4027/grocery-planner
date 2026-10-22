@@ -3,6 +3,7 @@
 import { STORE_PRESETS } from '../config.js';
 import * as store from '../store.js';
 import { buildGoogleCalendarUrl } from '../calendar.js';
+import { createSheetController } from '../sheet.js';
 import { h, icon, ICONS, showToast, formatQuantity } from '../ui.js';
 
 const PRESET_ORDER = ['kroger', 'wholefoods', 'costco', 'custom'];
@@ -11,7 +12,8 @@ export function mount(root) {
   let renaming = false;
   let selectedPreset = 'custom';
   let lastActiveChipId = null;
-  const viewport = window.visualViewport;
+
+  document.body.classList.add('has-add-dock');
 
   root.innerHTML = `
     <header class="page-head">
@@ -62,16 +64,18 @@ export function mount(root) {
       <div id="items" class="items" tabindex="-1" aria-label="List items"></div>
     </section>
 
-    <button
-      class="fab"
-      id="add-fab"
-      type="button"
-      aria-haspopup="dialog"
-      aria-controls="add-dialog"
-    >
-      <span class="fab__icon" aria-hidden="true">${ICONS.plus}</span>
-      <span>Add item</span>
-    </button>
+    <div class="add-dock">
+      <button
+        class="fab"
+        id="add-fab"
+        type="button"
+        aria-haspopup="dialog"
+        aria-controls="add-dialog"
+      >
+        <span class="fab__icon" aria-hidden="true">${ICONS.plus}</span>
+        <span>Add item</span>
+      </button>
+    </div>
 
     <dialog id="add-dialog" class="sheet" aria-labelledby="sheet-title">
       <div class="sheet__handle" aria-hidden="true"></div>
@@ -114,17 +118,21 @@ export function mount(root) {
             />
           </label>
           <label class="field">
-            <span class="field__label">Unit</span>
+            <span class="field__label">Description</span>
             <input
               id="add-unit"
               class="field__input"
               name="unit"
               type="text"
-              maxlength="12"
-              placeholder="lb, bag…"
+              maxlength="40"
+              placeholder="organic, green, 2 lb bag…"
             />
           </label>
         </div>
+        <label class="field field--stacked" id="add-list-field" hidden>
+          <span class="field__label">Add to</span>
+          <select id="add-list" class="field__input" name="list"></select>
+        </label>
       </form>
 
       <p id="sheet-status" class="sheet__status" role="status" aria-live="polite"></p>
@@ -224,6 +232,8 @@ export function mount(root) {
     nameInput: root.querySelector('#add-name'),
     qtyInput: root.querySelector('#add-qty'),
     unitInput: root.querySelector('#add-unit'),
+    listField: root.querySelector('#add-list-field'),
+    listSelect: root.querySelector('#add-list'),
     status: root.querySelector('#sheet-status'),
     newListDialog: root.querySelector('#new-list-dialog'),
     newListClose: root.querySelector('#new-list-close'),
@@ -247,6 +257,7 @@ export function mount(root) {
 
   function render() {
     renderWarning();
+    renderAddListOptions();
 
     const list = currentList();
     renderChips();
@@ -275,6 +286,22 @@ export function mount(root) {
 
     refs.warning.hidden = !message;
     refs.warning.textContent = message;
+  }
+
+  function renderAddListOptions({ forceActive = false } = {}) {
+    const lists = store.visibleLists();
+    const active = currentList();
+    const activeId = active ? active.id : '';
+    const previous = refs.listSelect.value;
+
+    refs.listSelect.replaceChildren(
+      ...lists.map((entry) => h('option', { value: entry.id }, entry.name))
+    );
+
+    const hasPrevious = lists.some((entry) => entry.id === previous);
+    refs.listSelect.value =
+      (!forceActive && hasPrevious ? previous : activeId) || (lists[0] && lists[0].id) || '';
+    refs.listField.hidden = lists.length < 2;
   }
 
   function renderChips() {
@@ -489,109 +516,14 @@ export function mount(root) {
 
   /* ---------- Sheets ---------- */
 
-  const openDialogs = new Set();
-
-  function syncSheetLock() {
-    document.body.classList.toggle('sheet-open', openDialogs.size > 0);
-  }
-
-  function syncViewportGap() {
-    if (!viewport) return;
-
-    const gap = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
-    for (const dialog of openDialogs) {
-      dialog.style.setProperty('--keyboard-gap', `${Math.round(gap)}px`);
-    }
-  }
-
-  function resolveTarget(value) {
-    return typeof value === 'function' ? value() : value;
-  }
-
-  function createSheetController(dialog, options = {}) {
-    const { trigger, initialFocus, selectOnOpen = false, onOpen, onClose } = options;
-    let finalized = true;
-
-    function focusTrigger() {
-      const target = resolveTarget(trigger);
-      if (target && target.isConnected) target.focus({ preventScroll: true });
-    }
-
-    function finalize() {
-      if (finalized) return;
-
-      finalized = true;
-      openDialogs.delete(dialog);
-      dialog.style.removeProperty('--keyboard-gap');
-      syncSheetLock();
-      if (onClose) onClose();
-
-      // Let the native dialog finish restoring focus first, then put it where
-      // this view wants it (for example, the newly active list chip).
-      setTimeout(focusTrigger, 0);
-    }
-
-    function open() {
-      if (dialog.open) return;
-
-      dialog.showModal();
-      finalized = false;
-      openDialogs.add(dialog);
-      syncSheetLock();
-      syncViewportGap();
-      if (onOpen) onOpen();
-
-      const focusInitial = () => {
-        const target = resolveTarget(initialFocus);
-        if (!target) return;
-        target.focus({ preventScroll: true });
-        if (selectOnOpen && typeof target.select === 'function') target.select();
-      };
-
-      focusInitial();
-      requestAnimationFrame(focusInitial);
-    }
-
-    function close() {
-      if (dialog.open) dialog.close();
-      finalize();
-    }
-
-    function destroy() {
-      finalized = true;
-      if (dialog.open) dialog.close();
-      openDialogs.delete(dialog);
-      dialog.style.removeProperty('--keyboard-gap');
-    }
-
-    dialog.addEventListener('close', finalize);
-    dialog.addEventListener('cancel', (event) => {
-      event.preventDefault();
-      close();
-    });
-    dialog.addEventListener('click', (event) => {
-      // Clicks on buttons and fields bubble here. Only a click that lands on
-      // the dialog itself can be a backdrop click; this also keeps keyboard
-      // activation (whose synthetic click is at 0,0) from closing the sheet.
-      if (event.target !== dialog) return;
-
-      const rect = dialog.getBoundingClientRect();
-      const outside =
-        event.clientX < rect.left ||
-        event.clientX > rect.right ||
-        event.clientY < rect.top ||
-        event.clientY > rect.bottom;
-
-      if (outside) close();
-    });
-
-    return { open, close, destroy, isOpen: () => dialog.open };
-  }
-
   const addSheet = createSheetController(refs.dialog, {
     trigger: () => refs.fab,
     initialFocus: () => refs.nameInput,
     selectOnOpen: true,
+    onOpen: () => {
+      renderAddListOptions({ forceActive: true });
+      refs.status.textContent = '';
+    },
     onClose: () => {
       refs.status.textContent = '';
     },
@@ -616,11 +548,6 @@ export function mount(root) {
     },
   });
 
-  if (viewport) {
-    viewport.addEventListener('resize', syncViewportGap);
-    viewport.addEventListener('scroll', syncViewportGap);
-  }
-
   /* ---------- Add sheet ---------- */
 
   refs.fab.addEventListener('click', () => addSheet.open());
@@ -629,8 +556,8 @@ export function mount(root) {
   refs.form.addEventListener('submit', (event) => {
     event.preventDefault();
 
-    const list = currentList();
-    if (!list) return;
+    const active = currentList();
+    if (!active) return;
 
     const name = refs.nameInput.value.trim();
     if (!name) {
@@ -638,14 +565,28 @@ export function mount(root) {
       return;
     }
 
-    store.addItem(list.id, {
+    const targetId = refs.listSelect.value;
+    const target =
+      store.visibleLists().find((entry) => entry.id === targetId) || active;
+
+    const item = store.addItem(target.id, {
       name,
       qty: refs.qtyInput.value,
       unit: refs.unitInput.value,
     });
 
+    if (!item) {
+      refs.status.textContent = 'Could not add that item.';
+      return;
+    }
+
+    if (store.getState().settings.activeListId !== target.id) {
+      store.setActiveList(target.id);
+    }
+
     refs.form.reset();
-    refs.status.textContent = `Added ${name}.`;
+    renderAddListOptions({ forceActive: true });
+    refs.status.textContent = `Added ${item.name} to ${target.name}.`;
     refs.nameInput.focus({ preventScroll: true });
   });
 
@@ -747,16 +688,13 @@ export function mount(root) {
     if (!list) return;
 
     const items = store.visibleItems(list);
-    const picked = items.filter((item) => item.checked).length;
 
-    refs.calendarEventTitle.value = `${list.name} run`;
+    refs.calendarEventTitle.value = list.name;
     refs.calendarDate.value = todayInputValue();
     refs.calendarTime.value = '17:00';
     refs.calendarSummary.textContent = `${items.length} item${
       items.length === 1 ? '' : 's'
-    } will go in the event description${
-      picked ? ` (${picked} already picked)` : ''
-    }. You can still edit the event in Google Calendar.`;
+    } will go in the event description. You can still edit the event in Google Calendar.`;
     refs.calendarStatus.textContent = '';
   }
 
@@ -845,13 +783,7 @@ export function mount(root) {
     addSheet.destroy();
     newListSheet.destroy();
     calendarSheet.destroy();
-    openDialogs.clear();
-    syncSheetLock();
-
-    if (viewport) {
-      viewport.removeEventListener('resize', syncViewportGap);
-      viewport.removeEventListener('scroll', syncViewportGap);
-    }
+    document.body.classList.remove('has-add-dock');
   };
 }
 

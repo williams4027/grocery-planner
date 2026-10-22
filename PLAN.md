@@ -9,7 +9,8 @@ exporting/importing a JSON file. Hosted free on GitHub Pages.
 - **Storage:** IndexedDB (single state document) with localStorage fallback
 - **Sync:** manual export/import only (no server, no accounts, no network calls)
 
-**Status:** Phases 0–1 implemented, plus per-store lists and Google Calendar trip export. Backup/restore is next.
+**Status:** Phases 0–1 implemented, plus per-store lists, Google Calendar trip export, and seeded
+recipes. Backup/restore is next.
 
 ---
 
@@ -58,7 +59,7 @@ exporting/importing a JSON file. Hosted free on GitHub Pages.
 2. `#/list` — active grocery list in shopping mode: grouped by aisle, big checkboxes, sticky
    aisle headers, running "x of y picked" counter. Store chips switch between Kroger, Whole Foods,
    Costco, and custom lists.
-3. `#/recipes` — recipe list + detail/edit.
+3. `#/recipes` — recipe list, search/filter, detail, add-to-list, and create form.
 4. `#/lists` — all lists, create/rename/archive/duplicate.
 5. `#/settings` — aisle order, backup/restore, install help, data reset, app version.
 
@@ -160,6 +161,8 @@ Everything else (Node 14, npm, Safari) is fine for this stack, since there is no
 │   ├── model.js            # factories, aisle keywords, normalization
 │   ├── calendar.js         # Google Calendar trip details + URL builder (pure)
 │   ├── store.js            # state container, IndexedDB persistence, subscribe()
+│   ├── seed-recipes.js     # recipes imported from the meal-planning sheet
+│   ├── sheet.js            # shared bottom-sheet dialog controller
 │   ├── pwa.js              # service worker registration, update checks
 │   ├── io.js               # export, import, validation (Phase 2)
 │   ├── ui.js               # tiny DOM helpers, icons, toast
@@ -203,6 +206,8 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 - Independent lists for Kroger, Whole Foods, Costco, and custom stores; store chips switch in one tap.
 - Presets set the list name and reorder existing aisles (no new categories).
 - `settings.activeListId` remembers the last list; old single-list data migrates silently.
+- The Add item sheet can target any visible list; adding to a different list switches the active
+  list so the result is visible.
 - **Calendar handoff:** a sheet collects title/date/time, then opens a prefilled Google Calendar
   event with the list grouped by aisle in the description. No OAuth, no backend.
 - **Accept:** create three store lists, switch between them, reload, and open a prefilled trip event
@@ -217,11 +222,13 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 - **Accept:** export on phone A → import on phone B → identical list. Import of a corrupt file
   fails safely without touching existing data.
 
-### Phase 3 — Recipes (2 days)
-- Recipe list with search/tags; create/edit form with repeatable ingredient rows.
-- Ingredient model: name, qty, unit, aisle (auto-suggested); reorder/duplicate recipe.
-- Recipe detail with "add ingredients to list" (scale by servings).
-- **Accept:** build 5 recipes on desktop, export, import on phone, add one recipe to a list.
+### Phase 3 — Recipes (done, v0.5.0; editing extras queued)
+- Recipe list with search and category filters; create form with a simple ingredient textarea.
+- Ingredient model: name, qty, unit, aisle (auto-suggested); leading quantities are parsed.
+- Recipe detail with "add ingredients to list" (any visible list) without scaling.
+- Twenty recipes seeded from the household meal-planning sheet, guarded by a seed marker.
+- Still queued: edit/reorder/duplicate recipes and scale ingredients by servings.
+- **Accept:** open a seeded recipe on a phone and add its ingredients to a chosen list offline.
 
 ### Phase 4 — Weekly meal plan + generate list (2 days)
 - Week view: 7 days × 3 slots, prev/next week, "today" jump; assign recipe or free text.

@@ -8,7 +8,7 @@
  * IMPORTANT: bump VERSION whenever you deploy so phones pick up new files.
  */
 
-const VERSION = '0.4.0';
+const VERSION = '0.5.0';
 const SHELL_CACHE = `gp-shell-${VERSION}`;
 const RUNTIME_CACHE = `gp-runtime-${VERSION}`;
 
@@ -24,6 +24,8 @@ const SHELL_ASSETS = [
   './js/config.js',
   './js/model.js',
   './js/store.js',
+  './js/sheet.js',
+  './js/seed-recipes.js',
   './js/ui.js',
   './js/pwa.js',
   './js/views/plan.js',

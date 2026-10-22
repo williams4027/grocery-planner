@@ -11,8 +11,8 @@ be installed from Safari on an iPhone.
 - **Free hosting.** GitHub Pages on a custom domain: `https://cheers-studios.com/grocery-planner/`
   (the `williams4027.github.io` URL redirects there).
 
-Status: **Phase 1 plus per-store lists and Google Calendar trip export.** Backup/restore is next.
-See [PLAN.md](./PLAN.md) for the full roadmap.
+Status: **Phase 1 plus per-store lists, Google Calendar trip export, and seeded recipes.** Backup and
+restore is next. See [PLAN.md](./PLAN.md) for the full roadmap.
 
 ## Quick start
 
@@ -87,9 +87,11 @@ manifest.webmanifest    install metadata and icons
 sw.js                   offline caching and update behaviour
 js/app.js               boot, hash router, tab state, network status
 js/config.js            app name, version, schema version, aisles, store presets, storage keys
-js/model.js             factories, aisle keyword map, normalization
+js/model.js             factories, aisle keyword map, ingredient parsing, normalization
 js/calendar.js          pure Google Calendar trip-detail and URL builders
 js/store.js             state container, IndexedDB/localStorage persistence, actions
+js/seed-recipes.js      recipes seeded from the meal-planning sheet
+js/sheet.js             shared bottom-sheet dialog controller
 js/ui.js                DOM helper, icons, toast
 js/pwa.js               service worker registration and update checks
 js/views/               plan.js, list.js, recipes.js, more.js
@@ -103,15 +105,21 @@ PLAN.md                 product plan, data model, phase breakdown
 
 - Keep separate lists for **Kroger, Whole Foods, Costco**, or a custom store; switch with the chips
   above the list. Each store has its own aisle order, and the active list is remembered.
-- Add items from a floating **Add item** button anywhere in the list; the sheet stays open for
-  batch entry.
-- Add items with an optional quantity and unit; delete with one tap.
+- Add items from the docked **Add item** button at the bottom of the list screen; the sheet stays
+  open for batch entry. If you have more than one store list, choose **Add to** (Kroger, Costco, …)
+  before submitting.
+- Add items with an optional quantity and description (for example, “organic” or “green”); delete
+  with one tap.
 - Automatic aisle grouping (produce, dairy, pantry, …) with sticky headers.
 - Check items off; picked items sink within their aisle and the counter updates.
 - Rename the active list inline.
 - **Add trip to Google Calendar** opens a prefilled event with the list in the description. It is a
   link, not an account connection: you pick the title/date/time, then review and save it in Google
   Calendar.
+- Browse **recipes seeded from the meal-planning sheet**, search or filter by category, and add all
+  of a recipe’s ingredients to the active list or another store list in one tap. You can also save
+  new recipes; ingredient lines like “2 cups chopped carrots” are split into quantity, unit, and
+  item name automatically.
 - Everything persists in IndexedDB on the device, survives force-quit, and works offline.
 - Storage failures (private mode, quota) surface as a banner instead of failing silently.
 

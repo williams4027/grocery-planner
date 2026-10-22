@@ -40,6 +40,10 @@ export const ICONS = {
       <path d="m4.5 19.5 4.2-1 9.9-9.9a2.1 2.1 0 0 0-3-3L5.7 15.5l-1.2 4Z" />
       <path d="m13.8 7.4 3 3" />
     </svg>`,
+  chevron: `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="m9 5 7 7-7 7" />
+    </svg>`,
 };
 
 /** Creates an element. Children may be nodes, strings, arrays, or null. */

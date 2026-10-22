@@ -1,6 +1,6 @@
 /* Data model, defaults, and pure helpers. No DOM, no persistence. */
 
-import { AISLES, SCHEMA_VERSION, STORE_PRESETS } from './config.js';
+import { AISLES, RECIPE_CATEGORIES, SCHEMA_VERSION, STORE_PRESETS } from './config.js';
 
 const AISLE_KEYWORDS = [
   ['Frozen', ['frozen', 'ice cream', 'popsicle', 'frozen pizza']],
@@ -78,7 +78,13 @@ export function createList(name = 'Groceries', { storeKey = 'custom', aisleOrder
   };
 }
 
-export function createItem({ name, qty = null, unit = '', aisle = null } = {}) {
+export function createItem({
+  name,
+  qty = null,
+  unit = '',
+  aisle = null,
+  sourceRecipeId = null,
+} = {}) {
   const cleanName = String(name || '')
     .trim()
     .replace(/\s+/g, ' ');
@@ -92,8 +98,151 @@ export function createItem({ name, qty = null, unit = '', aisle = null } = {}) {
     aisle: AISLES.includes(aisle) ? aisle : suggestAisle(cleanName),
     checked: false,
     note: null,
-    sourceRecipeId: null,
+    sourceRecipeId:
+      typeof sourceRecipeId === 'string' && sourceRecipeId ? sourceRecipeId : null,
     addedAt: timestamp,
+    updatedAt: timestamp,
+    deletedAt: null,
+  };
+}
+
+const UNICODE_FRACTIONS = {
+  '¼': 0.25,
+  '½': 0.5,
+  '¾': 0.75,
+  '⅓': 1 / 3,
+  '⅔': 2 / 3,
+  '⅛': 0.125,
+  '⅜': 0.375,
+  '⅝': 0.625,
+  '⅞': 0.875,
+};
+
+const INGREDIENT_UNITS =
+  /^(cups?|tbsp|tsp|lbs?|oz|g|kg|ml|l|cloves?|cans?|cartons?|slices?|bunch(?:es)?|bags?|packs?|jars?|bottles?|boxes?|pinch(?:es)?|dash(?:es)?|sticks?|heads?|sprigs?|fillets?|pieces?)\b\s+(.+)$/i;
+
+function quantityValue(token) {
+  if (UNICODE_FRACTIONS[token] !== undefined) return UNICODE_FRACTIONS[token];
+
+  if (token.includes(' ')) {
+    const [whole, fraction] = token.split(/\s+/);
+    const fractionValue = quantityValue(fraction);
+    return Number(whole) + fractionValue;
+  }
+
+  if (token.includes('/')) {
+    const [numerator, denominator] = token.split('/').map(Number);
+    return denominator ? numerator / denominator : NaN;
+  }
+
+  return Number(token);
+}
+
+/**
+ * Splits a recipe line like "1 1/2 cups chopped carrots" into quantity, unit,
+ * and the item name used by the grocery list. Lines without a recognised unit
+ * stay whole, so "1 small onion" is not mangled into a bare "small onion".
+ */
+export function parseIngredientLine(line) {
+  const raw = String(line || '')
+    .trim()
+    .replace(/^[-•*]\s*/, '')
+    .replace(/\s+/g, ' ');
+  if (!raw) return { name: '', qty: null, unit: '' };
+
+  const text = raw.replace(
+    /^(\d+)\s+([¼½¾⅓⅔⅛⅜⅝⅞])\s+/,
+    (_, whole, fraction) => `${Number(whole) + UNICODE_FRACTIONS[fraction]} `
+  );
+
+  const quantityMatch = text.match(
+    /^(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞])\s+(.+)$/
+  );
+  if (!quantityMatch) return { name: raw, qty: null, unit: '' };
+
+  const qty = normalizeQty(quantityValue(quantityMatch[1]));
+  const unitMatch = quantityMatch[2].match(INGREDIENT_UNITS);
+  if (!unitMatch) return { name: raw, qty: null, unit: '' };
+
+  return {
+    name: unitMatch[2].trim(),
+    qty,
+    unit: unitMatch[1],
+  };
+}
+
+function normalizeIngredient(input) {
+  const source = typeof input === 'string' ? parseIngredientLine(input) : input;
+  if (!source || typeof source !== 'object') return null;
+
+  const name = String(source.name || '')
+    .trim()
+    .replace(/\s+/g, ' ');
+  if (!name) return null;
+
+  return {
+    name,
+    qty: normalizeQty(source.qty),
+    unit: String(source.unit || '').trim(),
+    aisle: AISLES.includes(source.aisle) ? source.aisle : suggestAisle(name),
+  };
+}
+
+function normalizeRecipeCategory(value) {
+  if (RECIPE_CATEGORIES.includes(value)) return value;
+
+  const clean = String(value || '')
+    .trim()
+    .toLowerCase();
+  if (clean === 'breakfast') return 'Breakfast';
+  if (clean === 'snack' || clean === 'dessert') return 'Snack';
+  if (clean.includes('lunch') || clean.includes('dinner') || clean === 'main') {
+    return 'Lunch/Dinner';
+  }
+  return 'Other';
+}
+
+function normalizeServings(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return 4;
+  return Math.max(1, Math.round(number));
+}
+
+function normalizeSteps(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((step) => String(step || '').trim())
+    .filter(Boolean);
+}
+
+export function createRecipe({
+  title,
+  category = 'Lunch/Dinner',
+  servings = 4,
+  ingredients = [],
+  steps = [],
+  notes = '',
+  sourceUrl = null,
+  seedKey = null,
+} = {}) {
+  const timestamp = nowIso();
+
+  return {
+    id: uid('rcp'),
+    title:
+      String(title || '')
+        .trim()
+        .replace(/\s+/g, ' ') || 'Untitled recipe',
+    category: normalizeRecipeCategory(category),
+    servings: normalizeServings(servings),
+    ingredients: Array.isArray(ingredients)
+      ? ingredients.map(normalizeIngredient).filter(Boolean)
+      : [],
+    steps: normalizeSteps(steps),
+    notes: String(notes || '').trim(),
+    sourceUrl: typeof sourceUrl === 'string' && sourceUrl ? sourceUrl : null,
+    seedKey: typeof seedKey === 'string' && seedKey ? seedKey : null,
+    createdAt: timestamp,
     updatedAt: timestamp,
     deletedAt: null,
   };
@@ -124,6 +273,7 @@ function defaultSettings() {
     theme: 'system',
     lastExportAt: null,
     backupNudgeDays: 14,
+    recipeSeedVersion: 0,
   };
 }
 
@@ -146,6 +296,10 @@ function normalizeSettings(input) {
       Number.isFinite(settings.backupNudgeDays) && settings.backupNudgeDays > 0
         ? settings.backupNudgeDays
         : 14,
+    recipeSeedVersion:
+      Number.isFinite(settings.recipeSeedVersion) && settings.recipeSeedVersion >= 0
+        ? settings.recipeSeedVersion
+        : 0,
   };
 }
 
@@ -174,6 +328,35 @@ function normalizeItem(input) {
         : null,
     addedAt,
     updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : addedAt,
+    deletedAt: typeof input.deletedAt === 'string' ? input.deletedAt : null,
+  };
+}
+
+function normalizeRecipe(input) {
+  if (!input || typeof input !== 'object') return null;
+
+  const title = String(input.title || '')
+    .trim()
+    .replace(/\s+/g, ' ');
+  if (!title) return null;
+
+  const timestamp = nowIso();
+  const createdAt = typeof input.createdAt === 'string' ? input.createdAt : timestamp;
+
+  return {
+    id: typeof input.id === 'string' && input.id ? input.id : uid('rcp'),
+    title,
+    category: normalizeRecipeCategory(input.category),
+    servings: normalizeServings(input.servings),
+    ingredients: Array.isArray(input.ingredients)
+      ? input.ingredients.map(normalizeIngredient).filter(Boolean)
+      : [],
+    steps: normalizeSteps(input.steps),
+    notes: String(input.notes || '').trim(),
+    sourceUrl: typeof input.sourceUrl === 'string' && input.sourceUrl ? input.sourceUrl : null,
+    seedKey: typeof input.seedKey === 'string' && input.seedKey ? input.seedKey : null,
+    createdAt,
+    updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : createdAt,
     deletedAt: typeof input.deletedAt === 'string' ? input.deletedAt : null,
   };
 }
@@ -229,7 +412,9 @@ export function normalizeState(input) {
     createdAt: typeof input.createdAt === 'string' ? input.createdAt : timestamp,
     updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : timestamp,
     lists,
-    recipes: Array.isArray(input.recipes) ? input.recipes : [],
+    recipes: Array.isArray(input.recipes)
+      ? input.recipes.map(normalizeRecipe).filter(Boolean)
+      : [],
     plan: Array.isArray(input.plan) ? input.plan : [],
     settings,
   };

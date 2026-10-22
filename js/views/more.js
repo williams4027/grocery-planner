@@ -15,6 +15,7 @@ export function mount(root) {
   const list = store.getActiveList();
   const lists = store.visibleLists();
   const itemCount = store.visibleItems(list).length;
+  const recipeCount = store.visibleRecipes().length;
 
   root.innerHTML = `
     <h1 class="page-title">More</h1>
@@ -23,12 +24,13 @@ export function mount(root) {
     <section class="card" aria-labelledby="build-title">
       <div class="card__head">
         <h2 id="build-title">This build</h2>
-        <span class="badge">Lists + calendar</span>
+        <span class="badge">Lists + recipes</span>
       </div>
       <ul class="rows">
         <li><span class="row__label">Version</span><span class="row__value">${VERSION}</span></li>
         <li><span class="row__label">Lists</span><span class="row__value">${lists.length}</span></li>
         <li><span class="row__label">Items on active list</span><span class="row__value">${itemCount}</span></li>
+        <li><span class="row__label">Recipes</span><span class="row__value">${recipeCount}</span></li>
         <li><span class="row__label">Storage</span><span class="row__value">${MODE_LABELS[info.mode] || info.mode}</span></li>
         <li><span class="row__label">Sharing</span><span class="row__value">Export / import (Phase 2)</span></li>
       </ul>
@@ -76,8 +78,8 @@ export function mount(root) {
         <li class="is-done"><span class="roadmap__dot"></span>Phase 0 — installable shell</li>
         <li class="is-done"><span class="roadmap__dot"></span>Phase 1 — grocery list that persists</li>
         <li class="is-done"><span class="roadmap__dot"></span>Per-store lists and Google Calendar trips</li>
+        <li class="is-done"><span class="roadmap__dot"></span>Phase 3 — recipes and seeded meals</li>
         <li class="is-current"><span class="roadmap__dot"></span>Phase 2 — backup and restore</li>
-        <li><span class="roadmap__dot"></span>Phase 3 — recipes</li>
         <li><span class="roadmap__dot"></span>Phase 4 — meal plan and list generation</li>
         <li><span class="roadmap__dot"></span>Phase 5 — merge between two phones</li>
       </ul>
