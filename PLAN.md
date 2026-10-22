@@ -3,7 +3,8 @@
 A local-first PWA for weekly meal planning and grocery shopping, shared between two phones by
 exporting/importing a JSON file. Hosted free on GitHub Pages.
 
-- **Live URL (target):** `https://<github-user>.github.io/grocery-planner/`
+- **Live URL:** `https://cheers-studios.com/grocery-planner/` (custom domain; the
+  `williams4027.github.io` URL redirects here).
 - **Stack:** plain HTML + CSS + ES modules, no bundler, no build step
 - **Storage:** IndexedDB (single state document) with localStorage fallback
 - **Sync:** manual export/import only (no server, no accounts, no network calls)
@@ -32,6 +33,9 @@ exporting/importing a JSON file. Hosted free on GitHub Pages.
   about backups.
 - **GitHub Pages subpath:** the site lives under `/grocery-planner/`, so every asset URL and route
   must be relative. No leading-slash paths, no `pushState` routing — use hash routes (`#/list`).
+- **Shared origin:** `cheers-studios.com` may host other projects, and browser storage is scoped per
+  origin, not per path. IndexedDB database and localStorage keys must be namespaced
+  (`grocery-planner`) so they cannot collide with another app on the same domain.
 - **Pages requires a public repo** on free accounts (private + Pages needs GitHub Pro).
 - **`gh` CLI is not installed.** Repo creation is either manual in the browser or `brew install gh`.
 
@@ -162,7 +166,7 @@ No framework. Each view exports `render(root)` and returns a cleanup function.
 
 ## 4. Phase plan (each phase ships to Pages)
 
-> Every phase ends with: push to `main` → Pages redeploys → open the `.github.io` URL on the
+> Every phase ends with: push to `main` → Pages redeploys → open the live URL on the
 > iPhone and confirm the acceptance criteria.
 
 ### Phase 0 — Deploy a real PWA shell (½ day)
@@ -178,7 +182,9 @@ No framework. Each view exports `render(root)` and returns a cleanup function.
 
 ### Phase 1 — Grocery list MVP, offline-persistent (1–2 days)
 - `store.js`: IndexedDB `kv` store holding one state doc, debounced writes, localStorage fallback,
-  `subscribe()` for re-render; hydrate on boot with a loading state.
+  `subscribe()` for re-render; hydrate on boot with a loading state. Namespace the IndexedDB
+  database (`grocery-planner`) and the localStorage key (`grocery-planner:state:v1`) because the
+  custom domain's origin is shared with other projects.
 - Single list: add item (name + optional qty/unit), toggle, delete, rename list.
 - Group by aisle using the keyword map; sticky headers; counter.
 - Empty states and a "storage unavailable (private mode)" warning.
@@ -216,6 +222,8 @@ No framework. Each view exports `render(root)` and returns a cleanup function.
 
 ### Phase 6 — Polish pass (1–2 days)
 - Install help page per platform (iOS Share → Add to Home Screen; Android/desktop install button).
+- Chrome/Edge install UX: capture `beforeinstallprompt`, show an "Install app" button in More, and
+  hide it on iOS where the event never fires; listen for `appinstalled`.
 - Service worker update toast ("New version — reload"), version stamped in Settings.
 - Screen Wake Lock in shopping mode (best effort, ignored if unsupported).
 - Print stylesheet for the list; dark mode; reduced-motion; focus states; ARIA labels.
@@ -241,7 +249,7 @@ No framework. Each view exports `render(root)` and returns a cleanup function.
 3. `git remote add origin git@github.com:<user>/grocery-planner.git` (or HTTPS).
 4. `git push -u origin main`.
 5. Repo → Settings → Pages → Source: *Deploy from a branch* → `main` / `(root)` → Save.
-6. Wait for the Pages build, open `https://<user>.github.io/grocery-planner/`.
+6. Wait for the Pages build, open `https://cheers-studios.com/grocery-planner/`.
 
 **Every release after that**
 1. Bump `VERSION` in `js/app.js` and `CACHE_VERSION` in `sw.js` (critical — otherwise phones keep

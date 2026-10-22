@@ -8,7 +8,8 @@ be installed from Safari on an iPhone.
 - **No backend, no accounts.** All data stays in the browser (IndexedDB). Sharing between phones is
   an explicit JSON export/import.
 - **Offline by default.** A service worker caches the app shell, so it opens in airplane mode.
-- **Free hosting.** GitHub Pages, served from `https://<user>.github.io/grocery-planner/`.
+- **Free hosting.** GitHub Pages on a custom domain: `https://cheers-studios.com/grocery-planner/`
+  (the `williams4027.github.io` URL redirects there).
 
 Status: **Phase 0 — installable shell.** See [PLAN.md](./PLAN.md) for the full roadmap.
 
@@ -59,8 +60,9 @@ One-time setup:
    - Source: **Deploy from a branch**
    - Branch: **main**, folder: **/ (root)**
    - Save.
-5. Wait for the Pages build, then open `https://<your-username>.github.io/grocery-planner/` on your
-   phone. In Safari: **Share → Add to Home Screen**.
+5. Wait for the Pages build, then open the live URL — `https://cheers-studios.com/grocery-planner/`
+   (or `https://williams4027.github.io/grocery-planner/`, which redirects to it) — on your phone.
+   In Safari: **Share → Add to Home Screen**.
 
 ## Release checklist
 
