@@ -68,9 +68,10 @@ Bottom tab bar for Plan / List / Recipes / More.
 
 ### Signature flows
 - **Plan → shop:** choosing a recipe for a slot immediately adds its ingredients to the selected
-  list, scaled by `planned servings / recipe servings`. Each item keeps `sourceRecipeId` and
-  `sourcePlanEntryId`, so changing or clearing that meal can remove its unchecked items without
-  touching checked ones. Custom/free-text meals stay on the plan without adding ingredients.
+  list, scaled by `planned servings / recipe servings`. Each item keeps `sourceRecipeId` plus
+  `sourcePlanEntryId` or per-entry `planContributions`, so changing or clearing that meal can remove
+  only its unchecked share without touching checked ones. Custom/free-text meals stay on the plan
+  without adding ingredients.
 - **Shop:** check items off one-handed; checked items sink to the bottom of their aisle; list
   survives app kill and offline reloads.
 - **Share:** export produces `grocery-planner-backup-YYYY-MM-DD.json`; send via
@@ -83,7 +84,7 @@ Bottom tab bar for Plan / List / Recipes / More.
   "format": "grocery-planner-backup",
   "formatVersion": 1,
   "schemaVersion": 1,
-  "appVersion": "0.9.1",
+  "appVersion": "0.9.2",
   "exportedAt": "2026-10-22T15:00:00.000Z",
   "state": {
     "recipes": [{
@@ -105,6 +106,7 @@ Bottom tab bar for Plan / List / Recipes / More.
         "id": "itm_1", "name": "chicken thighs", "qty": 2, "unit": "lb",
         "aisle": "Meat & Seafood", "checked": false, "note": null,
         "sourceRecipeId": "rcp_1", "sourcePlanEntryId": "pln_1",
+        "planContributions": { "pln_1": 2 },
         "addedAt": "...", "updatedAt": "...", "deletedAt": null
       }]
     }],
@@ -113,7 +115,7 @@ Bottom tab bar for Plan / List / Recipes / More.
       "aisleOrder": ["Produce", "Meat & Seafood", "Dairy", "Bakery", "Frozen", "Pantry", "Household", "Other"],
       "activeListId": "lst_1",
       "theme": "system", "lastExportAt": null, "backupNudgeDays": 14,
-      "recipeSeedVersion": 1
+      "recipeSeedVersion": 1, "itemMergeVersion": 2
     }
   }
 }
@@ -233,11 +235,14 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 - **Accept:** export on phone A → import on phone B → identical list. Import of a corrupt file
   fails safely without touching existing data. Done.
 
-### Phase 2.5 — List refinement (done, v0.9.1)
+### Phase 2.5 — List refinement (done, v0.9.2)
 - Adding an item that matches an existing row on the target list combines quantities instead of
   creating a duplicate. Matching ignores name/unit case, simple unit plurals, and common ingredient
   name plurals such as egg/eggs. A one-time upgrade cleanup merges duplicate rows saved by older
-  versions while keeping separate planned meals distinct.
+  versions.
+- Planned meals that share an ingredient share one combined row. Each meal records its own quantity
+  contribution, so updating or clearing one meal removes only that meal’s share and leaves checked
+  rows untouched.
 - The item edit sheet exposes **Move to**; saving with another list selected moves the row, merging
   with a matching target row when possible. Manual/recipe additions and moves share the merge logic.
 - Seed recipe ingredients were normalized to one lowercase grocery vocabulary with canonical
@@ -258,8 +263,8 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 - Week view: 7 days × 3 slots, prev/next week, "today" jump; assign recipe or free text.
 - Servings per entry; copy last week into empty slots; clear day.
 - Choosing a recipe automatically adds scaled ingredients to the selected list with
-  `sourceRecipeId` and `sourcePlanEntryId`. Updating or clearing a meal removes only that meal's
-  unchecked items; checked items are kept.
+  `sourceRecipeId` and per-meal quantity contributions. Updating or clearing a meal removes only
+  that meal's unchecked share; checked items are kept.
 - **Accept:** plan 5 dinners, see their ingredients on the chosen list, shop, check off; plan
   persists offline. Done: plan entries and automatic additions survive reload.
 

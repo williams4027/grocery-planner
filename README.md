@@ -134,8 +134,9 @@ PLAN.md                 product plan, data model, phase breakdown
   into quantity, unit, and item name automatically.
 - **Plan a week of meals** in a 7-day × 3-slot grid. Move between weeks, jump back to today, set
   servings, copy last week into empty slots, or clear a day. Choosing a recipe adds its ingredients
-  to the selected list automatically, scaled to the planned servings. Updating or clearing a meal
-  removes only the unchecked items it added; items you already checked off are kept.
+  to the selected list automatically, scaled to the planned servings. Meals that share an
+  ingredient keep one combined row; updating or clearing a meal removes only that meal’s share of
+  the quantity. Items you already checked off are kept.
 - Everything persists in IndexedDB on the device, survives force-quit, and works offline.
 - **Export backup** in More downloads a JSON copy of every list, item, recipe, planned meal, and
   setting. **Restore from file** validates the backup first, shows what it contains, and only

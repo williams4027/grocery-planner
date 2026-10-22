@@ -32,7 +32,7 @@ const listeners = new Set();
 const RECIPE_CATEGORY_ORDER = new Map(
   RECIPE_CATEGORIES.map((category, index) => [category, index])
 );
-const ITEM_MERGE_VERSION = 1;
+const ITEM_MERGE_VERSION = 2;
 let saveTimer = null;
 let saveChain = Promise.resolve();
 
@@ -294,12 +294,11 @@ export function addRecipeToPlan({
   const removed = removePlanItems(entry.id);
   const preserved = new Set(
     list.items
-      .filter(
-        (item) =>
-          !item.deletedAt &&
-          item.checked &&
-          item.sourcePlanEntryId === entry.id
-      )
+      .filter((item) => {
+        if (item.deletedAt || !item.checked) return false;
+        const contributions = planContributionMap(item);
+        return Object.prototype.hasOwnProperty.call(contributions, entry.id);
+      })
       .map(itemMatchKey)
   );
 
@@ -322,7 +321,16 @@ export function addRecipeToPlan({
     });
 
     if (!item.name) continue;
-    list.items.push(item);
+
+    // Share a row with the same ingredient from another meal, while recording
+    // this meal's quantity separately so clearing one meal stays exact.
+    const existing = findVisibleMatch(list, item);
+    if (existing) {
+      addPlanContribution(existing, entry.id, item.qty);
+      if (!existing.sourceRecipeId) existing.sourceRecipeId = recipe.id;
+    } else {
+      list.items.push(item);
+    }
     added += 1;
   }
 
@@ -449,10 +457,23 @@ export function updateItem(listId, itemId, input = {}) {
     .replace(/\s+/g, ' ');
   if (!name) return null;
 
+  const nextQty = 'qty' in input ? normalizeQty(input.qty) : item.qty;
+  const nextUnit =
+    'unit' in input ? String(input.unit || '').trim() : item.unit;
+  const quantityChanged = nextQty !== item.qty || nextUnit !== item.unit;
+
   item.name = name;
-  if ('qty' in input) item.qty = normalizeQty(input.qty);
-  if ('unit' in input) item.unit = String(input.unit || '').trim();
+  item.qty = nextQty;
+  item.unit = nextUnit;
   item.aisle = suggestAisle(name);
+
+  // A manually corrected quantity owns the row; it should no longer be
+  // removed or reduced when a planned meal is changed later.
+  if (quantityChanged) {
+    item.sourcePlanEntryId = null;
+    item.planContributions = null;
+  }
+
   item.updatedAt = nowIso();
   touchListById(listId);
   commit();
@@ -669,8 +690,9 @@ function ensureRecipeSeed() {
 }
 
 /**
- * One-time cleanup for lists saved before plural-aware matching. It keeps
- * distinct planned meals separate so clearing one plan entry stays exact.
+ * One-time cleanup for lists saved before matching and per-meal quantity
+ * tracking. Duplicate rows, including ones created by separate planned meals,
+ * are combined into one row with each meal's contribution recorded.
  */
 function ensureListDedupe() {
   const currentVersion = Number(state.settings.itemMergeVersion) || 0;
@@ -689,14 +711,6 @@ function ensureListDedupe() {
       const existing = seen.get(key);
       if (!existing) {
         seen.set(key, item);
-        continue;
-      }
-
-      if (
-        existing.sourcePlanEntryId &&
-        item.sourcePlanEntryId &&
-        existing.sourcePlanEntryId !== item.sourcePlanEntryId
-      ) {
         continue;
       }
 
@@ -766,18 +780,32 @@ function removePlanItems(planEntryId) {
 
   for (const list of state.lists) {
     let touched = false;
+
     for (const item of list.items) {
-      if (
-        item.deletedAt ||
-        item.sourcePlanEntryId !== planEntryId ||
-        item.checked
-      ) {
+      if (item.deletedAt) continue;
+
+      const contributions = planContributionMap(item);
+      if (!Object.prototype.hasOwnProperty.call(contributions, planEntryId)) {
         continue;
       }
 
-      item.deletedAt = timestamp;
-      item.updatedAt = timestamp;
-      removed += 1;
+      // Checked rows are already bought. Clearing a meal should leave them in
+      // place, including the amount contributed by that meal.
+      if (item.checked) continue;
+
+      const baseQty = manualBaseQuantity(item, contributions);
+      delete contributions[planEntryId];
+
+      if (!Object.keys(contributions).length && baseQty <= 0) {
+        item.deletedAt = timestamp;
+        item.updatedAt = timestamp;
+        syncPlanSource(item, contributions);
+        removed += 1;
+      } else {
+        setItemQuantity(item, baseQty, contributions);
+        item.updatedAt = timestamp;
+      }
+
       touched = true;
     }
 
@@ -792,6 +820,72 @@ function scaleQuantity(qty, recipeServings, plannedServings) {
   const from = Number(recipeServings) || 1;
   const to = Number(plannedServings) || from;
   return normalizeQty(qty * (to / from));
+}
+
+function planContributionMap(item) {
+  if (!item) return {};
+
+  if (
+    item.planContributions &&
+    typeof item.planContributions === 'object' &&
+    !Array.isArray(item.planContributions) &&
+    Object.keys(item.planContributions).length
+  ) {
+    return item.planContributions;
+  }
+
+  const contributions = {};
+  if (item.sourcePlanEntryId) {
+    contributions[item.sourcePlanEntryId] = Number(item.qty) || 0;
+  }
+  item.planContributions = Object.keys(contributions).length
+    ? contributions
+    : null;
+  return contributions;
+}
+
+function sumPlanContributions(contributions) {
+  return Object.values(contributions).reduce(
+    (sum, qty) => sum + (Number(qty) || 0),
+    0
+  );
+}
+
+function combinedContribution(current, addition) {
+  const total = (Number(current) || 0) + (Number(addition) || 0);
+  return Math.round(total * 1000) / 1000;
+}
+
+function manualBaseQuantity(item, contributions = planContributionMap(item)) {
+  return Math.max(
+    0,
+    (Number(item && item.qty) || 0) - sumPlanContributions(contributions)
+  );
+}
+
+function syncPlanSource(item, contributions) {
+  const entryIds = Object.keys(contributions);
+  item.sourcePlanEntryId = entryIds.length === 1 ? entryIds[0] : null;
+  item.planContributions = entryIds.length ? contributions : null;
+}
+
+function setItemQuantity(item, baseQty, contributions) {
+  item.qty = normalizeQty(baseQty + sumPlanContributions(contributions));
+  item.unit = displayUnitForQuantity(item.unit, item.qty);
+  syncPlanSource(item, contributions);
+}
+
+function addPlanContribution(item, planEntryId, qty) {
+  const contributions = planContributionMap(item);
+  const baseQty = manualBaseQuantity(item, contributions);
+  contributions[planEntryId] = combinedContribution(
+    contributions[planEntryId],
+    qty
+  );
+  setItemQuantity(item, baseQty, contributions);
+  item.checked = false;
+  item.updatedAt = nowIso();
+  return item;
 }
 
 /* Unit matching ignores case and simple singular/plural differences, so "1 cup
@@ -937,21 +1031,26 @@ function findVisibleMatch(list, item) {
 
 /** Combines a duplicate row into an existing item and keeps its identity. */
 function mergeItem(existing, item, { checked = false, timestamp = nowIso() } = {}) {
-  const totalQty = (Number(existing.qty) || 0) + (Number(item.qty) || 0);
-  existing.qty = totalQty > 0 ? normalizeQty(totalQty) : null;
-  existing.unit = displayUnitForQuantity(existing.unit || item.unit, existing.qty);
+  const existingContributions = planContributionMap(existing);
+  const itemContributions = planContributionMap(item);
+  const existingBaseQty = manualBaseQuantity(existing, existingContributions);
+  const itemBaseQty = manualBaseQuantity(item, itemContributions);
+
+  for (const [planEntryId, qty] of Object.entries(itemContributions)) {
+    existingContributions[planEntryId] = combinedContribution(
+      existingContributions[planEntryId],
+      qty
+    );
+  }
+
+  setItemQuantity(
+    existing,
+    existingBaseQty + itemBaseQty,
+    existingContributions
+  );
   existing.checked = Boolean(checked);
   if (!existing.sourceRecipeId && item.sourceRecipeId) {
     existing.sourceRecipeId = item.sourceRecipeId;
-  }
-  // A row that combines planned and manual additions no longer belongs solely
-  // to one meal entry, so leave it in place when that meal is cleared.
-  if (existing.sourcePlanEntryId && item.sourcePlanEntryId) {
-    if (existing.sourcePlanEntryId !== item.sourcePlanEntryId) {
-      existing.sourcePlanEntryId = null;
-    }
-  } else if (existing.sourcePlanEntryId || item.sourcePlanEntryId) {
-    existing.sourcePlanEntryId = null;
   }
   if (!existing.note && item.note) existing.note = item.note;
   existing.updatedAt = timestamp;

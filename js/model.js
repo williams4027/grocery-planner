@@ -39,6 +39,25 @@ export function normalizeQty(value) {
   return Math.round(number * 1000) / 1000;
 }
 
+/**
+ * Planned-meal quantities are tracked per plan entry so one meal can be
+ * cleared without disturbing another meal's contribution to the same row.
+ * Zero is valid here: a plan ingredient without a quantity still needs a row.
+ */
+function normalizePlanContributions(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+
+  const contributions = {};
+  for (const [entryId, value] of Object.entries(input)) {
+    if (typeof entryId !== 'string' || !entryId) continue;
+    const qty = value === null || value === '' ? 0 : Number(value);
+    if (!Number.isFinite(qty) || qty < 0) continue;
+    contributions[entryId] = Math.round(qty * 1000) / 1000;
+  }
+
+  return Object.keys(contributions).length ? contributions : null;
+}
+
 export function suggestAisle(name) {
   const text = ` ${String(name || '')
     .toLowerCase()
@@ -92,16 +111,28 @@ export function createItem({
   aisle = null,
   sourceRecipeId = null,
   sourcePlanEntryId = null,
+  planContributions = null,
 } = {}) {
   const cleanName = String(name || '')
     .trim()
     .replace(/\s+/g, ' ');
   const timestamp = nowIso();
+  const normalizedQty = normalizeQty(qty);
+  const planEntryId =
+    typeof sourcePlanEntryId === 'string' && sourcePlanEntryId
+      ? sourcePlanEntryId
+      : null;
+  const normalizedContributions =
+    normalizePlanContributions(planContributions) ||
+    (planEntryId ? { [planEntryId]: Number(normalizedQty) || 0 } : null);
+  const contributionIds = normalizedContributions
+    ? Object.keys(normalizedContributions)
+    : [];
 
   return {
     id: uid('itm'),
     name: cleanName,
-    qty: normalizeQty(qty),
+    qty: normalizedQty,
     unit: String(unit || '').trim(),
     aisle: AISLES.includes(aisle) ? aisle : suggestAisle(cleanName),
     checked: false,
@@ -109,9 +140,8 @@ export function createItem({
     sourceRecipeId:
       typeof sourceRecipeId === 'string' && sourceRecipeId ? sourceRecipeId : null,
     sourcePlanEntryId:
-      typeof sourcePlanEntryId === 'string' && sourcePlanEntryId
-        ? sourcePlanEntryId
-        : null,
+      contributionIds.length === 1 ? contributionIds[0] : null,
+    planContributions: normalizedContributions,
     addedAt: timestamp,
     updatedAt: timestamp,
     deletedAt: null,
@@ -385,11 +415,26 @@ function normalizeItem(input) {
 
   const timestamp = nowIso();
   const addedAt = typeof input.addedAt === 'string' ? input.addedAt : timestamp;
+  const qty = normalizeQty(input.qty);
+  const requestedPlanEntryId =
+    typeof input.sourcePlanEntryId === 'string' && input.sourcePlanEntryId
+      ? input.sourcePlanEntryId
+      : null;
+  const planContributions =
+    normalizePlanContributions(input.planContributions) ||
+    (requestedPlanEntryId
+      ? { [requestedPlanEntryId]: Number(qty) || 0 }
+      : null);
+  const contributionIds = planContributions
+    ? Object.keys(planContributions)
+    : [];
+  const sourcePlanEntryId =
+    contributionIds.length === 1 ? contributionIds[0] : null;
 
   return {
     id: typeof input.id === 'string' && input.id ? input.id : uid('itm'),
     name,
-    qty: normalizeQty(input.qty),
+    qty,
     unit: String(input.unit || '').trim(),
     aisle: AISLES.includes(input.aisle) ? input.aisle : suggestAisle(name),
     checked: Boolean(input.checked),
@@ -398,10 +443,8 @@ function normalizeItem(input) {
       typeof input.sourceRecipeId === 'string' && input.sourceRecipeId
         ? input.sourceRecipeId
         : null,
-    sourcePlanEntryId:
-      typeof input.sourcePlanEntryId === 'string' && input.sourcePlanEntryId
-        ? input.sourcePlanEntryId
-        : null,
+    sourcePlanEntryId,
+    planContributions,
     addedAt,
     updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : addedAt,
     deletedAt: typeof input.deletedAt === 'string' ? input.deletedAt : null,
