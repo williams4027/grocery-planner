@@ -9,8 +9,8 @@ exporting/importing a JSON file. Hosted free on GitHub Pages.
 - **Storage:** IndexedDB (single state document) with localStorage fallback
 - **Sync:** manual export/import only (no server, no accounts, no network calls)
 
-**Status:** Phases 0–1 implemented, plus per-store lists, Google Calendar trip export, and seeded
-recipes. Backup/restore is next.
+**Status:** Phases 0–1 implemented, plus per-store lists, Google Calendar trip export, seeded
+recipes, and item/recipe editing. Backup/restore is next.
 
 ---
 
@@ -79,7 +79,7 @@ Bottom tab bar for Plan / List / Recipes / More.
 ```json
 {
   "schemaVersion": 1,
-  "appVersion": "0.4.0",
+  "appVersion": "0.5.1",
   "deviceId": "dev_ab12",
   "exportedAt": "2026-10-22T15:00:00.000Z",
   "state": {
@@ -208,6 +208,8 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 - `settings.activeListId` remembers the last list; old single-list data migrates silently.
 - The Add item sheet can target any visible list; adding to a different list switches the active
   list so the result is visible.
+- Tap the pencil on an item to edit its name, quantity, or description; the aisle is re-suggested
+  from the new name and checked state is preserved.
 - **Calendar handoff:** a sheet collects title/date/time, then opens a prefilled Google Calendar
   event with the list grouped by aisle in the description. No OAuth, no backend.
 - **Accept:** create three store lists, switch between them, reload, and open a prefilled trip event
@@ -222,13 +224,13 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 - **Accept:** export on phone A → import on phone B → identical list. Import of a corrupt file
   fails safely without touching existing data.
 
-### Phase 3 — Recipes (done, v0.5.0; editing extras queued)
-- Recipe list with search and category filters; create form with a simple ingredient textarea.
+### Phase 3 — Recipes (done, v0.5.1; reorder and scaling queued)
+- Recipe list with search and category filters; create/edit form with a simple ingredient textarea.
 - Ingredient model: name, qty, unit, aisle (auto-suggested); leading quantities are parsed.
-- Recipe detail with "add ingredients to list" (any visible list) without scaling.
+- Recipe detail with edit and "add ingredients to list" (any visible list) without scaling.
 - Twenty recipes seeded from the household meal-planning sheet, guarded by a seed marker.
-- Still queued: edit/reorder/duplicate recipes and scale ingredients by servings.
-- **Accept:** open a seeded recipe on a phone and add its ingredients to a chosen list offline.
+- Still queued: reorder/duplicate recipes and scale ingredients by servings.
+- **Accept:** edit a seeded recipe and add its ingredients to a chosen list offline.
 
 ### Phase 4 — Weekly meal plan + generate list (2 days)
 - Week view: 7 days × 3 slots, prev/next week, "today" jump; assign recipe or free text.

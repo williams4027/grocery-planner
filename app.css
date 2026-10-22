@@ -1005,6 +1005,13 @@ body.has-add-dock .toast {
   text-decoration-thickness: 1px;
 }
 
+.item__actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+}
+
+.item__edit,
 .item__delete {
   display: grid;
   place-items: center;
@@ -1019,12 +1026,19 @@ body.has-add-dock .toast {
   -webkit-tap-highlight-color: transparent;
 }
 
+.item__edit:hover,
+.item__edit:focus-visible {
+  background: var(--surface-2);
+  color: var(--accent);
+}
+
 .item__delete:hover,
 .item__delete:focus-visible {
   background: var(--surface-2);
   color: var(--danger);
 }
 
+.item__edit svg,
 .item__delete svg {
   width: 19px;
   height: 19px;
@@ -1636,7 +1650,8 @@ body.sheet-open {
   gap: 8px;
 }
 
-.recipe-add {
+.recipe-add,
+.recipe-edit {
   width: 100%;
   min-height: 46px;
 }
@@ -1709,6 +1724,7 @@ body.sheet-open {
 
 @media print {
   .add-dock,
+  .item__actions,
   .sheet,
   .list-bar,
   .page-head__actions {

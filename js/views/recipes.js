@@ -12,6 +12,8 @@ export function mount(root) {
   let category = 'All';
   let selectedRecipeId = null;
   let lastRecipeTrigger = null;
+  let editingRecipeId = null;
+  let lastFormTrigger = null;
 
   root.innerHTML = `
     <header class="page-head">
@@ -120,7 +122,9 @@ export function mount(root) {
           as written.
         </p>
 
-        <button class="btn btn--primary new-list__submit" type="submit">Save recipe</button>
+        <button id="recipe-form-submit" class="btn btn--primary new-list__submit" type="submit">
+          Save recipe
+        </button>
       </form>
 
       <p id="recipe-form-status" class="sheet__status" role="status" aria-live="polite"></p>
@@ -139,10 +143,12 @@ export function mount(root) {
     detailStatus: root.querySelector('#recipe-detail-status'),
     detailClose: root.querySelector('#recipe-detail-close'),
     formDialog: root.querySelector('#recipe-form-dialog'),
+    formTitle: root.querySelector('#recipe-form-title'),
     form: root.querySelector('#recipe-form'),
     nameInput: root.querySelector('#recipe-name'),
     categoryInput: root.querySelector('#recipe-category'),
     ingredientsInput: root.querySelector('#recipe-ingredients'),
+    formSubmit: root.querySelector('#recipe-form-submit'),
     formStatus: root.querySelector('#recipe-form-status'),
     formClose: root.querySelector('#recipe-form-close'),
   };
@@ -157,11 +163,58 @@ export function mount(root) {
     },
   });
 
+  function ingredientLine(ingredient) {
+    const quantity = formatQuantity(ingredient);
+    return [quantity, ingredient.name].filter(Boolean).join(' ');
+  }
+
+  function prepareRecipeForm() {
+    refs.formStatus.textContent = '';
+
+    if (editingRecipeId) {
+      const recipe = store.getRecipe(editingRecipeId);
+      if (recipe) {
+        refs.formTitle.textContent = 'Edit recipe';
+        refs.formSubmit.textContent = 'Save changes';
+        refs.nameInput.value = recipe.title;
+        refs.categoryInput.value = recipe.category;
+        refs.ingredientsInput.value = recipe.ingredients
+          .map(ingredientLine)
+          .join('\n');
+        return;
+      }
+
+      editingRecipeId = null;
+      refs.form.reset();
+    }
+
+    refs.formTitle.textContent = 'New recipe';
+    refs.formSubmit.textContent = 'Save recipe';
+  }
+
+  function resetRecipeFormMode() {
+    if (!editingRecipeId) return;
+
+    editingRecipeId = null;
+    refs.form.reset();
+    refs.formTitle.textContent = 'New recipe';
+    refs.formSubmit.textContent = 'Save recipe';
+  }
+
+  function openRecipeForm({ recipeId = null, trigger = refs.newButton } = {}) {
+    editingRecipeId = recipeId;
+    lastFormTrigger = trigger;
+    formSheet.open();
+  }
+
   const formSheet = createSheetController(refs.formDialog, {
-    trigger: () => refs.newButton,
+    trigger: () =>
+      lastFormTrigger && lastFormTrigger.isConnected ? lastFormTrigger : refs.newButton,
     initialFocus: () => refs.nameInput,
     selectOnOpen: true,
+    onOpen: prepareRecipeForm,
     onClose: () => {
+      resetRecipeFormMode();
       refs.formStatus.textContent = '';
     },
   });
@@ -366,6 +419,15 @@ export function mount(root) {
         h(
           'button',
           {
+            class: 'btn recipe-edit',
+            type: 'button',
+            dataset: { action: 'edit-recipe' },
+          },
+          'Edit recipe'
+        ),
+        h(
+          'button',
+          {
             class: 'recipe-remove',
             type: 'button',
             dataset: { action: 'delete-recipe' },
@@ -400,7 +462,7 @@ export function mount(root) {
     const action = event.target.closest('button[data-action]');
     if (!action) return;
 
-    if (action.dataset.action === 'new') formSheet.open();
+    if (action.dataset.action === 'new') openRecipeForm({ trigger: action });
     else if (action.dataset.action === 'clear') clearFilters();
   });
 
@@ -436,6 +498,21 @@ export function mount(root) {
       return;
     }
 
+    if (button.dataset.action === 'edit-recipe') {
+      const recipe = store.getRecipe(selectedRecipeId);
+      if (!recipe) return;
+
+      const trigger = lastRecipeTrigger;
+      detailSheet.close();
+      setTimeout(() => {
+        openRecipeForm({
+          recipeId: recipe.id,
+          trigger: trigger && trigger.isConnected ? trigger : refs.newButton,
+        });
+      }, 0);
+      return;
+    }
+
     if (button.dataset.action === 'delete-recipe') {
       const recipe = store.getRecipe(selectedRecipeId);
       if (!recipe) return;
@@ -449,7 +526,7 @@ export function mount(root) {
     }
   });
 
-  refs.newButton.addEventListener('click', () => formSheet.open());
+  refs.newButton.addEventListener('click', () => openRecipeForm());
   refs.formClose.addEventListener('click', () => formSheet.close());
 
   refs.form.addEventListener('submit', (event) => {
@@ -470,6 +547,24 @@ export function mount(root) {
     if (!ingredients.length) {
       refs.formStatus.textContent = 'Add at least one ingredient.';
       refs.ingredientsInput.focus();
+      return;
+    }
+
+    if (editingRecipeId) {
+      const recipe = store.updateRecipe(editingRecipeId, {
+        title,
+        category: refs.categoryInput.value,
+        ingredients,
+      });
+
+      if (!recipe) {
+        refs.formStatus.textContent = 'Could not save that recipe.';
+        return;
+      }
+
+      renderList();
+      formSheet.close();
+      showToast('Recipe updated.');
       return;
     }
 

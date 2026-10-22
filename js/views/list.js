@@ -12,6 +12,8 @@ export function mount(root) {
   let renaming = false;
   let selectedPreset = 'custom';
   let lastActiveChipId = null;
+  let editingItemId = null;
+  let lastItemTrigger = null;
 
   document.body.classList.add('has-add-dock');
 
@@ -101,7 +103,7 @@ export function mount(root) {
             autofocus
             required
           />
-          <button class="btn btn--primary add__submit" type="submit">Add</button>
+          <button id="add-submit" class="btn btn--primary add__submit" type="submit">Add</button>
         </div>
         <div class="add__details">
           <label class="field">
@@ -227,8 +229,10 @@ export function mount(root) {
     items: root.querySelector('#items'),
     fab: root.querySelector('#add-fab'),
     dialog: root.querySelector('#add-dialog'),
+    sheetTitle: root.querySelector('#sheet-title'),
     closeButton: root.querySelector('#sheet-close'),
     form: root.querySelector('#add-form'),
+    submitButton: root.querySelector('#add-submit'),
     nameInput: root.querySelector('#add-name'),
     qtyInput: root.querySelector('#add-qty'),
     unitInput: root.querySelector('#add-unit'),
@@ -301,7 +305,7 @@ export function mount(root) {
     const hasPrevious = lists.some((entry) => entry.id === previous);
     refs.listSelect.value =
       (!forceActive && hasPrevious ? previous : activeId) || (lists[0] && lists[0].id) || '';
-    refs.listField.hidden = lists.length < 2;
+    refs.listField.hidden = Boolean(editingItemId) || lists.length < 2;
   }
 
   function renderChips() {
@@ -502,29 +506,80 @@ export function mount(root) {
         )
       ),
       h(
-        'button',
-        {
-          class: 'item__delete',
-          type: 'button',
-          dataset: { id: item.id, action: 'delete' },
-          'aria-label': `Delete ${item.name}`,
-        },
-        icon('trash')
+        'div',
+        { class: 'item__actions' },
+        h(
+          'button',
+          {
+            class: 'item__edit',
+            type: 'button',
+            dataset: { id: item.id, action: 'edit' },
+            'aria-label': `Edit ${item.name}`,
+          },
+          icon('pencil')
+        ),
+        h(
+          'button',
+          {
+            class: 'item__delete',
+            type: 'button',
+            dataset: { id: item.id, action: 'delete' },
+            'aria-label': `Delete ${item.name}`,
+          },
+          icon('trash')
+        )
       )
     );
   }
 
   /* ---------- Sheets ---------- */
 
+  function prepareAddSheet() {
+    refs.status.textContent = '';
+
+    if (editingItemId) {
+      const list = currentList();
+      const item = list
+        ? store.visibleItems(list).find((entry) => entry.id === editingItemId)
+        : null;
+
+      if (item) {
+        refs.sheetTitle.textContent = 'Edit item';
+        refs.submitButton.textContent = 'Save';
+        refs.nameInput.value = item.name;
+        refs.qtyInput.value = item.qty == null ? '' : String(item.qty);
+        refs.unitInput.value = item.unit || '';
+        refs.listField.hidden = true;
+        return;
+      }
+
+      editingItemId = null;
+      refs.form.reset();
+    }
+
+    refs.sheetTitle.textContent = 'Add item';
+    refs.submitButton.textContent = 'Add';
+    renderAddListOptions({ forceActive: true });
+  }
+
+  function resetAddSheetMode() {
+    if (!editingItemId) return;
+
+    editingItemId = null;
+    refs.form.reset();
+    refs.sheetTitle.textContent = 'Add item';
+    refs.submitButton.textContent = 'Add';
+    renderAddListOptions({ forceActive: true });
+  }
+
   const addSheet = createSheetController(refs.dialog, {
-    trigger: () => refs.fab,
+    trigger: () =>
+      lastItemTrigger && lastItemTrigger.isConnected ? lastItemTrigger : refs.fab,
     initialFocus: () => refs.nameInput,
     selectOnOpen: true,
-    onOpen: () => {
-      renderAddListOptions({ forceActive: true });
-      refs.status.textContent = '';
-    },
+    onOpen: prepareAddSheet,
     onClose: () => {
+      resetAddSheetMode();
       refs.status.textContent = '';
     },
   });
@@ -550,7 +605,11 @@ export function mount(root) {
 
   /* ---------- Add sheet ---------- */
 
-  refs.fab.addEventListener('click', () => addSheet.open());
+  refs.fab.addEventListener('click', () => {
+    lastItemTrigger = null;
+    editingItemId = null;
+    addSheet.open();
+  });
   refs.closeButton.addEventListener('click', () => addSheet.close());
 
   refs.form.addEventListener('submit', (event) => {
@@ -562,6 +621,24 @@ export function mount(root) {
     const name = refs.nameInput.value.trim();
     if (!name) {
       refs.nameInput.focus();
+      return;
+    }
+
+    if (editingItemId) {
+      const item = store.updateItem(active.id, editingItemId, {
+        name,
+        qty: refs.qtyInput.value,
+        unit: refs.unitInput.value,
+      });
+
+      if (!item) {
+        refs.status.textContent = 'Could not save that item.';
+        return;
+      }
+
+      addSheet.close();
+      showToast('Item updated');
+      refs.items.focus({ preventScroll: true });
       return;
     }
 
@@ -756,15 +833,24 @@ export function mount(root) {
   });
 
   refs.items.addEventListener('click', (event) => {
-    const button = event.target.closest('button[data-action="delete"]');
+    const button = event.target.closest('button[data-action]');
     if (!button) return;
 
     const list = currentList();
     if (!list) return;
 
-    store.deleteItem(list.id, button.dataset.id);
-    showToast('Item removed');
-    refs.items.focus({ preventScroll: true });
+    if (button.dataset.action === 'edit') {
+      lastItemTrigger = button;
+      editingItemId = button.dataset.id;
+      addSheet.open();
+      return;
+    }
+
+    if (button.dataset.action === 'delete') {
+      store.deleteItem(list.id, button.dataset.id);
+      showToast('Item removed');
+      refs.items.focus({ preventScroll: true });
+    }
   });
 
   refs.renameButton.addEventListener('click', () => {

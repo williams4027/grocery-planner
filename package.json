@@ -1,6 +1,6 @@
 {
   "name": "grocery-planner",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "type": "module",
   "description": "Local-first meal planning and grocery list PWA for GitHub Pages",

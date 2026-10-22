@@ -108,8 +108,8 @@ PLAN.md                 product plan, data model, phase breakdown
 - Add items from the docked **Add item** button at the bottom of the list screen; the sheet stays
   open for batch entry. If you have more than one store list, choose **Add to** (Kroger, Costco, …)
   before submitting.
-- Add items with an optional quantity and description (for example, “organic” or “green”); delete
-  with one tap.
+- Add items with an optional quantity and description (for example, “organic” or “green”). Tap the
+  pencil on any row to edit its name, quantity, or description; delete with one tap.
 - Automatic aisle grouping (produce, dairy, pantry, …) with sticky headers.
 - Check items off; picked items sink within their aisle and the counter updates.
 - Rename the active list inline.
@@ -117,9 +117,9 @@ PLAN.md                 product plan, data model, phase breakdown
   link, not an account connection: you pick the title/date/time, then review and save it in Google
   Calendar.
 - Browse **recipes seeded from the meal-planning sheet**, search or filter by category, and add all
-  of a recipe’s ingredients to the active list or another store list in one tap. You can also save
-  new recipes; ingredient lines like “2 cups chopped carrots” are split into quantity, unit, and
-  item name automatically.
+  of a recipe’s ingredients to the active list or another store list in one tap. Save new recipes
+  or edit a recipe’s title, category, and ingredient lines, including quantities; ingredient lines
+  like “2 cups chopped carrots” are split into quantity, unit, and item name automatically.
 - Everything persists in IndexedDB on the device, survives force-quit, and works offline.
 - Storage failures (private mode, quota) surface as a banner instead of failing silently.
 

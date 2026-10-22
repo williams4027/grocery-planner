@@ -10,8 +10,10 @@ import {
   createItem,
   createList,
   createRecipe,
+  normalizeQty,
   normalizeState,
   nowIso,
+  suggestAisle,
 } from './model.js';
 import { RECIPE_SEED_VERSION, SEED_RECIPES } from './seed-recipes.js';
 
@@ -167,6 +169,33 @@ export function addRecipe(input) {
   return recipe;
 }
 
+export function updateRecipe(recipeId, input = {}) {
+  const recipe = getRecipe(recipeId);
+  if (!recipe) return null;
+
+  const title = String(input.title ?? recipe.title)
+    .trim()
+    .replace(/\s+/g, ' ');
+  if (!title) return null;
+
+  const next = createRecipe({
+    ...recipe,
+    ...input,
+    title,
+  });
+
+  recipe.title = next.title;
+  recipe.category = next.category;
+  recipe.servings = next.servings;
+  recipe.ingredients = next.ingredients;
+  recipe.steps = next.steps;
+  recipe.notes = next.notes;
+  recipe.sourceUrl = next.sourceUrl;
+  recipe.updatedAt = nowIso();
+  commit();
+  return recipe;
+}
+
 export function deleteRecipe(recipeId) {
   const recipe = getRecipe(recipeId);
   if (!recipe) return false;
@@ -230,6 +259,25 @@ export function addItem(listId, input) {
 
   list.items.push(item);
   touchList(list);
+  commit();
+  return item;
+}
+
+export function updateItem(listId, itemId, input = {}) {
+  const item = findItem(listId, itemId);
+  if (!item) return null;
+
+  const name = String(input.name || '')
+    .trim()
+    .replace(/\s+/g, ' ');
+  if (!name) return null;
+
+  item.name = name;
+  if ('qty' in input) item.qty = normalizeQty(input.qty);
+  if ('unit' in input) item.unit = String(input.unit || '').trim();
+  item.aisle = suggestAisle(name);
+  item.updatedAt = nowIso();
+  touchListById(listId);
   commit();
   return item;
 }
