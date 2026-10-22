@@ -11,12 +11,12 @@ be installed from Safari on an iPhone.
 - **Free hosting.** GitHub Pages on a custom domain: `https://cheers-studios.com/grocery-planner/`
   (the `williams4027.github.io` URL redirects there).
 
-Status: **Phase 0 — installable shell.** See [PLAN.md](./PLAN.md) for the full roadmap.
+Status: **Phase 1 — persistent grocery list.** See [PLAN.md](./PLAN.md) for the full roadmap.
 
 ## Quick start
 
 ```sh
-node dev-server.js
+npm run dev
 # → http://localhost:8000/
 ```
 
@@ -32,7 +32,7 @@ No dependencies to install. Node 14+ is enough.
 Regenerate icons after changing the design:
 
 ```sh
-node scripts/make-icons.js
+npm run icons
 ```
 
 ## Deploy to GitHub Pages
@@ -68,11 +68,11 @@ One-time setup:
 
 Every deploy:
 
-- [ ] Bump `VERSION` in `js/app.js` (shown in More).
+- [ ] Bump `VERSION` in `js/config.js` (shown in More).
 - [ ] Bump `VERSION` in `sw.js` (invalidates the shell cache — **required**, or phones keep old
       files).
 - [ ] Add any new shell files to `SHELL_ASSETS` in `sw.js`.
-- [ ] `node --check js/app.js && node --check sw.js`
+- [ ] `npm run check`
 - [ ] Commit, push, and open the Pages URL on a phone.
 - [ ] On the phone: verify the version in More and test with airplane mode on.
 - [ ] If the update doesn't appear, close and reopen the app; the update toast should reload it.
@@ -81,15 +81,30 @@ Every deploy:
 
 ```
 index.html              app shell, meta tags, tab bar
-app.css                 design tokens, layout, preview styles
+app.css                 design tokens, layout, list styles
 manifest.webmanifest    install metadata and icons
 sw.js                   offline caching and update behaviour
-js/app.js               router, views, network status, SW registration
-dev-server.js           zero-dependency static server
-scripts/make-icons.js   generates PNG icons (no image tooling required)
+js/app.js               boot, hash router, tab state, network status
+js/config.js            app name, version, schema version, aisles, storage keys
+js/model.js             factories, aisle keyword map, normalization
+js/store.js             state container, IndexedDB/localStorage persistence, actions
+js/ui.js                DOM helper, icons, toast
+js/pwa.js               service worker registration and update checks
+js/views/               plan.js, list.js, recipes.js, more.js
+dev-server.cjs          zero-dependency static server
+scripts/make-icons.cjs  generates PNG icons (no image tooling required)
 icons/                  generated PWA icons
 PLAN.md                 product plan, data model, phase breakdown
 ```
+
+## What works today
+
+- Add items with an optional quantity and unit; delete with one tap.
+- Automatic aisle grouping (produce, dairy, pantry, …) with sticky headers.
+- Check items off; picked items sink within their aisle and the counter updates.
+- Rename the list inline.
+- Everything persists in IndexedDB on the device, survives force-quit, and works offline.
+- Storage failures (private mode, quota) surface as a banner instead of failing silently.
 
 ## Data and privacy
 

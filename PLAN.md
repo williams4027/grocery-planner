@@ -9,6 +9,8 @@ exporting/importing a JSON file. Hosted free on GitHub Pages.
 - **Storage:** IndexedDB (single state document) with localStorage fallback
 - **Sync:** manual export/import only (no server, no accounts, no network calls)
 
+**Status:** Phases 0–1 implemented. Phase 2 is next.
+
 ---
 
 ## 1. Goals and non-goals
@@ -129,7 +131,7 @@ not resurrect from the other phone's copy. Tombstones are pruned after ~90 days 
    If you'd rather not, install git without Xcode: `brew install git` and put it ahead of
    `/usr/bin` on `PATH`.
 2. **`python3` is also unusable** for the same reason (killed on launch). Local preview will use a
-   ~30-line `dev-server.js` on Node 14 instead (`node dev-server.js` → port 8000).
+   ~30-line `dev-server.cjs` on Node 14 instead (`node dev-server.cjs` → port 8000).
 3. **`gh` CLI missing** — either create the repo in the browser, or `brew install gh` to create it
    and enable Pages from the terminal.
 4. **Git identity unset** — `git config --global user.name "..."` and `user.email "..."`.
@@ -147,20 +149,22 @@ Everything else (Node 14, npm, Safari) is fine for this stack, since there is no
 ├── manifest.webmanifest    # name, icons, display: standalone, theme colors
 ├── sw.js                   # precache shell + stale-while-revalidate for js/css
 ├── .nojekyll               # keep Pages from running Jekyll
-├── dev-server.js           # tiny Node static server for localhost testing
+├── dev-server.cjs          # tiny Node static server for localhost testing
 ├── icons/                  # 192, 512, maskable 512, apple-touch 180
 ├── js/
-│   ├── app.js              # bootstrap, router, tab bar, update toast
+│   ├── app.js              # boot, hash router, tab bar, network status
+│   ├── config.js           # name, version, schema version, aisles, storage keys
+│   ├── model.js            # factories, aisle keywords, normalization
 │   ├── store.js            # state container, IndexedDB persistence, subscribe()
-│   ├── model.js            # id/date helpers, factories, merge, migrations
-│   ├── io.js               # export, import, validation
-│   ├── ui.js               # tiny DOM helpers (el, on, fmt)
-│   └── views/              # plan.js, list.js, recipes.js, lists.js, settings.js
+│   ├── pwa.js              # service worker registration, update checks
+│   ├── io.js               # export, import, validation (Phase 2)
+│   ├── ui.js               # tiny DOM helpers, icons, toast
+│   └── views/              # plan.js, list.js, recipes.js, more.js, (lists.js Phase 2)
 ├── PLAN.md
 └── README.md
 ```
 
-No framework. Each view exports `render(root)` and returns a cleanup function.
+No framework. Each view exports `mount(root)` and returns an optional cleanup function.
 
 ---
 
@@ -169,9 +173,9 @@ No framework. Each view exports `render(root)` and returns a cleanup function.
 > Every phase ends with: push to `main` → Pages redeploys → open the live URL on the
 > iPhone and confirm the acceptance criteria.
 
-### Phase 0 — Deploy a real PWA shell (½ day)
+### Phase 0 — Deploy a real PWA shell (½ day) — **done**
 - `git init`, `.gitignore`, README, `.nojekyll`.
-- `dev-server.js` so the app can be tested over HTTP (service workers require it).
+- `dev-server.cjs` so the app can be tested over HTTP (service workers require it).
 - `index.html` with a "Hello, grocery" screen, `app.css` base tokens (system font, light/dark).
 - `manifest.webmanifest` + icons; `sw.js` caching the shell.
 - `js/app.js` with hash router stub and offline status indicator.
@@ -180,7 +184,7 @@ No framework. Each view exports `render(root)` and returns a cleanup function.
   mode + reload still renders the app.
 - **Why first:** proves HTTPS, base path, icons, and the install flow before any logic exists.
 
-### Phase 1 — Grocery list MVP, offline-persistent (1–2 days)
+### Phase 1 — Grocery list MVP, offline-persistent (1–2 days) — **done**
 - `store.js`: IndexedDB `kv` store holding one state doc, debounced writes, localStorage fallback,
   `subscribe()` for re-render; hydrate on boot with a loading state. Namespace the IndexedDB
   database (`grocery-planner`) and the localStorage key (`grocery-planner:state:v1`) because the
@@ -252,14 +256,13 @@ No framework. Each view exports `render(root)` and returns a cleanup function.
 6. Wait for the Pages build, open `https://cheers-studios.com/grocery-planner/`.
 
 **Every release after that**
-1. Bump `VERSION` in `js/app.js` and `CACHE_VERSION` in `sw.js` (critical — otherwise phones keep
-   the old shell).
+1. Bump `VERSION` in `js/config.js` and `sw.js` (critical — otherwise phones keep the old shell).
 2. Update the cache list only if the file set changed (shell is precached; `js/` and `css` use
    stale-while-revalidate).
 3. Commit + push; verify on phone; use Settings → "Reload to update" if the toast lags.
 
 **Local preview** (service workers need HTTP, not `file://`):
-`node dev-server.js` → <http://localhost:8000>. Test offline via DevTools → Network → Offline, and
+`node dev-server.cjs` → <http://localhost:8000>. Test offline via DevTools → Network → Offline, and
 on the phone via airplane mode. (Python's `http.server` would work too, but `python3` is currently
 blocked by the Xcode license, so the project ships its own tiny Node server.)
 
