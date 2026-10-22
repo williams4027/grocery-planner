@@ -21,6 +21,7 @@ function summaryLabel(summary) {
     countLabel(summary.lists, 'list'),
     countLabel(summary.items, 'item'),
     countLabel(summary.recipes, 'recipe'),
+    countLabel(summary.plan, 'planned meal'),
   ].join(' · ');
 }
 
@@ -68,6 +69,7 @@ export function mount(root) {
           <li><span class="row__label">Lists</span><span class="row__value">${summary.lists}</span></li>
           <li><span class="row__label">Items</span><span class="row__value">${summary.items}</span></li>
           <li><span class="row__label">Recipes</span><span class="row__value">${summary.recipes}</span></li>
+          <li><span class="row__label">Planned meals</span><span class="row__value">${summary.plan}</span></li>
           <li><span class="row__label">Storage</span><span class="row__value">${MODE_LABELS[info.mode] || info.mode}</span></li>
         </ul>
         <div class="btn-row">
@@ -114,8 +116,8 @@ export function mount(root) {
         />
         <p id="backup-status" class="sheet__status" role="status" aria-live="polite"></p>
         <p class="card__note">
-          Downloads an unencrypted JSON file with every list, item, recipe, and setting. Restoring
-          replaces all data on this device.
+          Downloads an unencrypted JSON file with every list, item, recipe, planned meal, and
+          setting. Restoring replaces all data on this device.
         </p>
       </section>
 
@@ -150,8 +152,8 @@ export function mount(root) {
           <li class="is-done"><span class="roadmap__dot"></span>Per-store lists and Google Calendar trips</li>
           <li class="is-done"><span class="roadmap__dot"></span>Recipes, editing, and seeded meals</li>
           <li class="is-done"><span class="roadmap__dot"></span>Backup and restore</li>
+          <li class="is-done"><span class="roadmap__dot"></span>Meal plan with automatic list additions</li>
           <li class="is-current"><span class="roadmap__dot"></span>Shopping polish and list management</li>
-          <li><span class="roadmap__dot"></span>Phase 4 — meal plan and list generation</li>
           <li><span class="roadmap__dot"></span>Phase 5 — merge between two phones</li>
         </ul>
       </section>
@@ -165,8 +167,8 @@ export function mount(root) {
           </button>
         </div>
         <p class="restore-warning">
-          This replaces every list, item, recipe, and setting on this device with the backup. This
-          cannot be undone.
+          This replaces every list, item, recipe, planned meal, and setting on this device with the
+          backup. This cannot be undone.
         </p>
         <p id="restore-summary" class="backup-summary"></p>
         <p id="restore-meta" class="card__note"></p>
@@ -253,8 +255,9 @@ export function mount(root) {
 
         root.querySelector('#restore-summary').textContent =
           `This backup contains ${countLabel(info.summary.lists, 'list')}, ` +
-          `${countLabel(info.summary.items, 'item')}, and ` +
-          `${countLabel(info.summary.recipes, 'recipe')}.`;
+          `${countLabel(info.summary.items, 'item')}, ` +
+          `${countLabel(info.summary.recipes, 'recipe')}, and ` +
+          `${countLabel(info.summary.plan, 'planned meal')}.`;
         root.querySelector('#restore-meta').textContent = info.exportedAt
           ? `Backup from ${formatBackupDate(info.exportedAt)}${
               info.appVersion ? ` · version ${info.appVersion}` : ''

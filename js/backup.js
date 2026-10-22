@@ -4,7 +4,8 @@
  * before replacing anything. Parsing is pure; the store owns the replacement.
  */
 
-import { SCHEMA_VERSION, VERSION } from './config.js';
+import { PLAN_SLOTS, SCHEMA_VERSION, VERSION } from './config.js';
+import { isValidDateKey } from './dates.js';
 import { normalizeState, nowIso, summarizeState } from './model.js';
 
 export const BACKUP_FORMAT = 'grocery-planner-backup';
@@ -58,6 +59,29 @@ function validateRecipe(recipe, index) {
   }
 }
 
+function validatePlanEntry(entry, index) {
+  if (!isObject(entry)) {
+    throw invalid(`Planned meal ${index + 1} in that backup is not valid.`);
+  }
+
+  const date = cleanName(entry.date);
+  const slot = cleanName(entry.slot).toLowerCase();
+  if (!isValidDateKey(date) || !PLAN_SLOTS.includes(slot)) {
+    throw invalid(`Planned meal ${index + 1} has an invalid date or slot.`);
+  }
+
+  if (!cleanName(entry.recipeId) && !cleanName(entry.title)) {
+    throw invalid(`Planned meal ${index + 1} is missing its recipe or meal name.`);
+  }
+
+  if (entry.servings !== undefined) {
+    const servings = Number(entry.servings);
+    if (!Number.isFinite(servings) || servings < 1) {
+      throw invalid(`Planned meal ${index + 1} has invalid servings.`);
+    }
+  }
+}
+
 function validateState(state) {
   if (!Array.isArray(state.lists) || !state.lists.length) {
     throw invalid('That backup is missing its lists.');
@@ -72,8 +96,11 @@ function validateState(state) {
     state.recipes.forEach(validateRecipe);
   }
 
-  if (state.plan !== undefined && !Array.isArray(state.plan)) {
-    throw invalid('That backup has an invalid meal plan.');
+  if (state.plan !== undefined) {
+    if (!Array.isArray(state.plan)) {
+      throw invalid('That backup has an invalid meal plan.');
+    }
+    state.plan.forEach(validatePlanEntry);
   }
 
   if (state.settings !== undefined && !isObject(state.settings)) {

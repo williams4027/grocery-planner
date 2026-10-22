@@ -1,6 +1,13 @@
 /* Data model, defaults, and pure helpers. No DOM, no persistence. */
 
-import { AISLES, RECIPE_CATEGORIES, SCHEMA_VERSION, STORE_PRESETS } from './config.js';
+import {
+  AISLES,
+  PLAN_SLOTS,
+  RECIPE_CATEGORIES,
+  SCHEMA_VERSION,
+  STORE_PRESETS,
+} from './config.js';
+import { isValidDateKey } from './dates.js';
 
 const AISLE_KEYWORDS = [
   ['Frozen', ['frozen', 'ice cream', 'popsicle', 'frozen pizza']],
@@ -84,6 +91,7 @@ export function createItem({
   unit = '',
   aisle = null,
   sourceRecipeId = null,
+  sourcePlanEntryId = null,
 } = {}) {
   const cleanName = String(name || '')
     .trim()
@@ -100,6 +108,10 @@ export function createItem({
     note: null,
     sourceRecipeId:
       typeof sourceRecipeId === 'string' && sourceRecipeId ? sourceRecipeId : null,
+    sourcePlanEntryId:
+      typeof sourcePlanEntryId === 'string' && sourcePlanEntryId
+        ? sourcePlanEntryId
+        : null,
     addedAt: timestamp,
     updatedAt: timestamp,
     deletedAt: null,
@@ -202,7 +214,7 @@ function normalizeRecipeCategory(value) {
   return 'Other';
 }
 
-function normalizeServings(value) {
+export function normalizeServings(value) {
   const number = Number(value);
   if (!Number.isFinite(number) || number <= 0) return 4;
   return Math.max(1, Math.round(number));
@@ -245,6 +257,61 @@ export function createRecipe({
     createdAt: timestamp,
     updatedAt: timestamp,
     deletedAt: null,
+  };
+}
+
+export function createPlanEntry({
+  date,
+  slot,
+  recipeId = null,
+  title = '',
+  servings = null,
+} = {}) {
+  const timestamp = nowIso();
+
+  return {
+    id: uid('pln'),
+    date: String(date || '').trim(),
+    slot: String(slot || '').trim().toLowerCase(),
+    recipeId:
+      typeof recipeId === 'string' && recipeId ? recipeId : null,
+    title: String(title || '')
+      .trim()
+      .replace(/\s+/g, ' '),
+    servings: normalizeServings(servings),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+export function normalizePlanEntry(input) {
+  if (!input || typeof input !== 'object') return null;
+
+  const date = String(input.date || '').trim();
+  const slot = String(input.slot || '')
+    .trim()
+    .toLowerCase();
+  if (!isValidDateKey(date) || !PLAN_SLOTS.includes(slot)) return null;
+
+  const timestamp = nowIso();
+  const createdAt = typeof input.createdAt === 'string' ? input.createdAt : timestamp;
+  const recipeId =
+    typeof input.recipeId === 'string' && input.recipeId ? input.recipeId : null;
+  const title = String(input.title || '')
+    .trim()
+    .replace(/\s+/g, ' ');
+
+  if (!recipeId && !title) return null;
+
+  return {
+    id: typeof input.id === 'string' && input.id ? input.id : uid('pln'),
+    date,
+    slot,
+    recipeId,
+    title,
+    servings: normalizeServings(input.servings),
+    createdAt,
+    updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : createdAt,
   };
 }
 
@@ -325,6 +392,10 @@ function normalizeItem(input) {
     sourceRecipeId:
       typeof input.sourceRecipeId === 'string' && input.sourceRecipeId
         ? input.sourceRecipeId
+        : null,
+    sourcePlanEntryId:
+      typeof input.sourcePlanEntryId === 'string' && input.sourcePlanEntryId
+        ? input.sourcePlanEntryId
         : null,
     addedAt,
     updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : addedAt,
@@ -407,6 +478,18 @@ export function normalizeState(input) {
     ? input.lists.map((list) => normalizeList(list, settings.aisleOrder)).filter(Boolean)
     : [];
 
+  const plan = [];
+  const planKeys = new Set();
+  for (const rawEntry of Array.isArray(input.plan) ? input.plan : []) {
+    const entry = normalizePlanEntry(rawEntry);
+    if (!entry) continue;
+
+    const key = `${entry.date}:${entry.slot}`;
+    if (planKeys.has(key)) continue;
+    planKeys.add(key);
+    plan.push(entry);
+  }
+
   const state = {
     schemaVersion: SCHEMA_VERSION,
     createdAt: typeof input.createdAt === 'string' ? input.createdAt : timestamp,
@@ -415,7 +498,7 @@ export function normalizeState(input) {
     recipes: Array.isArray(input.recipes)
       ? input.recipes.map(normalizeRecipe).filter(Boolean)
       : [],
-    plan: Array.isArray(input.plan) ? input.plan : [],
+    plan,
     settings,
   };
 
@@ -451,5 +534,10 @@ export function summarizeState(input) {
       ? input.recipes.filter((recipe) => recipe && !recipe.deletedAt && recipe.title).length
       : 0;
 
-  return { lists: lists.length, items, recipes };
+  const plan =
+    input && Array.isArray(input.plan)
+      ? input.plan.filter((entry) => entry && entry.date && entry.slot).length
+      : 0;
+
+  return { lists: lists.length, items, recipes, plan };
 }

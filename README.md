@@ -11,8 +11,9 @@ be installed from Safari on an iPhone.
 - **Free hosting.** GitHub Pages on a custom domain: `https://cheers-studios.com/grocery-planner/`
   (the `williams4027.github.io` URL redirects there).
 
-Status: **Phase 1 plus per-store lists, Google Calendar trip export, and seeded recipes.** Backup and
-restore is next. See [PLAN.md](./PLAN.md) for the full roadmap.
+Status: **Phase 1 plus per-store lists, Google Calendar trip export, seeded recipes, backup and
+restore, and weekly meal planning.** Shopping polish and list management is next. See
+[PLAN.md](./PLAN.md) for the full roadmap.
 
 ## Quick start
 
@@ -88,6 +89,7 @@ sw.js                   offline caching and update behaviour
 js/app.js               boot, hash router, tab state, network status
 js/config.js            app name, version, schema version, aisles, store presets, storage keys
 js/model.js             factories, aisle keyword map, ingredient parsing, normalization
+js/dates.js             local date keys, week starts, and day arithmetic
 js/backup.js            JSON backup format, parsing, and validation
 js/calendar.js          pure Google Calendar trip-detail and URL builders
 js/store.js             state container, IndexedDB/localStorage persistence, actions
@@ -121,10 +123,15 @@ PLAN.md                 product plan, data model, phase breakdown
   of a recipe’s ingredients to the active list or another store list in one tap. Save new recipes
   or edit a recipe’s title, category, and ingredient lines, including quantities; ingredient lines
   like “2 cups chopped carrots” are split into quantity, unit, and item name automatically.
+- **Plan a week of meals** in a 7-day × 3-slot grid. Move between weeks, jump back to today, set
+  servings, copy last week into empty slots, or clear a day. Choosing a recipe adds its ingredients
+  to the selected list automatically, scaled to the planned servings. Updating or clearing a meal
+  removes only the unchecked items it added; items you already checked off are kept.
 - Everything persists in IndexedDB on the device, survives force-quit, and works offline.
-- **Export backup** in More downloads a JSON copy of every list, item, recipe, and setting.
-  **Restore from file** validates the backup first, shows what it contains, and only replaces data
-  after you confirm. A corrupt or newer-version file is rejected without touching existing data.
+- **Export backup** in More downloads a JSON copy of every list, item, recipe, planned meal, and
+  setting. **Restore from file** validates the backup first, shows what it contains, and only
+  replaces data after you confirm. A corrupt or newer-version file is rejected without touching
+  existing data.
 - Storage failures (private mode, quota) surface as a banner instead of failing silently.
 
 ## Data and privacy

@@ -1,7 +1,7 @@
 /* Shared constants */
 
 export const APP_NAME = 'Grocery Planner';
-export const VERSION = '0.6.0';
+export const VERSION = '0.7.0';
 export const SCHEMA_VERSION = 1;
 
 export const AISLES = [
@@ -16,6 +16,14 @@ export const AISLES = [
 ];
 
 export const RECIPE_CATEGORIES = ['Breakfast', 'Lunch/Dinner', 'Snack', 'Other'];
+
+export const PLAN_SLOTS = ['breakfast', 'lunch', 'dinner'];
+
+export const PLAN_SLOT_LABELS = {
+  breakfast: 'Breakfast',
+  lunch: 'Lunch',
+  dinner: 'Dinner',
+};
 
 /* Store layouts reorder the same aisles; they do not add categories. */
 export const STORE_PRESETS = {

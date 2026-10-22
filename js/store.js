@@ -11,7 +11,9 @@ import {
   createItem,
   createList,
   createRecipe,
+  normalizePlanEntry,
   normalizeQty,
+  normalizeServings,
   normalizeState,
   nowIso,
   suggestAisle,
@@ -243,6 +245,134 @@ export function addRecipeToActiveList(recipeId) {
   return list ? addRecipeToList(recipeId, list.id) : 0;
 }
 
+export function getPlanEntries() {
+  return state.plan;
+}
+
+export function getPlanEntry(date, slot) {
+  return state.plan.find((entry) => entry.date === date && entry.slot === slot) || null;
+}
+
+export function getPlanEntriesInRange(startDate, endDate) {
+  return state.plan.filter((entry) => entry.date >= startDate && entry.date <= endDate);
+}
+
+export function getPlanEntriesInDate(date) {
+  return state.plan.filter((entry) => entry.date === date);
+}
+
+/**
+ * Plans a recipe in a date/slot and adds its ingredients to a list at the
+ * planned servings. Unchecked items previously added by this plan entry are
+ * replaced; checked items are kept.
+ */
+export function addRecipeToPlan({
+  date,
+  slot,
+  recipeId,
+  servings = null,
+  listId = null,
+} = {}) {
+  const recipe = getRecipe(recipeId);
+  const list = listId
+    ? state.lists.find((entry) => entry.id === listId && !entry.archivedAt)
+    : getActiveList();
+  if (!recipe || !list) return null;
+
+  const plannedServings = normalizeServings(servings ?? recipe.servings);
+  const entry = upsertPlanEntry({
+    date,
+    slot,
+    recipeId: recipe.id,
+    title: recipe.title,
+    servings: plannedServings,
+  });
+  if (!entry) return null;
+
+  const removed = removePlanItems(entry.id);
+  const preserved = new Set(
+    list.items
+      .filter(
+        (item) =>
+          !item.deletedAt &&
+          item.checked &&
+          item.sourcePlanEntryId === entry.id
+      )
+      .map(itemMatchKey)
+  );
+
+  let added = 0;
+  let skipped = 0;
+
+  for (const ingredient of recipe.ingredients) {
+    if (preserved.has(itemMatchKey(ingredient))) {
+      skipped += 1;
+      continue;
+    }
+
+    const item = createItem({
+      name: ingredient.name,
+      qty: scaleQuantity(ingredient.qty, recipe.servings, plannedServings),
+      unit: ingredient.unit,
+      aisle: ingredient.aisle,
+      sourceRecipeId: recipe.id,
+      sourcePlanEntryId: entry.id,
+    });
+
+    if (!item.name) continue;
+    list.items.push(item);
+    added += 1;
+  }
+
+  if (added) touchList(list);
+  commit();
+
+  return { entry, recipe, list, added, skipped, removed };
+}
+
+export function setPlanMeal({ date, slot, title, servings = 1 } = {}) {
+  const cleanTitle = String(title || '')
+    .trim()
+    .replace(/\s+/g, ' ');
+  if (!cleanTitle) return null;
+
+  const existing = getPlanEntry(date, slot);
+  const entry = upsertPlanEntry({
+    date,
+    slot,
+    recipeId: null,
+    title: cleanTitle,
+    servings,
+  });
+  if (!entry) return null;
+
+  const removed = existing ? removePlanItems(existing.id) : 0;
+  commit();
+  return { entry, removed };
+}
+
+export function clearPlanEntry(date, slot) {
+  const entry = getPlanEntry(date, slot);
+  if (!entry) return null;
+
+  const removed = removePlanItems(entry.id);
+  state.plan = state.plan.filter((item) => item.id !== entry.id);
+  commit();
+  return { entry, removed };
+}
+
+export function clearPlanDay(date) {
+  const entries = state.plan.filter((entry) => entry.date === date);
+  if (!entries.length) return { cleared: 0, removed: 0 };
+
+  let removed = 0;
+  for (const entry of entries) removed += removePlanItems(entry.id);
+
+  state.plan = state.plan.filter((entry) => entry.date !== date);
+  commit();
+  return { cleared: entries.length, removed };
+}
+
 export function getStorageInfo() {
   return { mode: storageMode, error: saveError || loadError };
 }
@@ -406,6 +536,76 @@ function commit() {
   state.updatedAt = nowIso();
   notify();
   scheduleSave();
+}
+
+function upsertPlanEntry({ date, slot, recipeId = null, title = '', servings = null }) {
+  const existing = getPlanEntry(date, slot);
+  const next = normalizePlanEntry({
+    id: existing ? existing.id : undefined,
+    date,
+    slot,
+    recipeId,
+    title,
+    servings,
+    createdAt: existing ? existing.createdAt : undefined,
+    updatedAt: nowIso(),
+  });
+  if (!next) return null;
+
+  if (existing) {
+    existing.recipeId = next.recipeId;
+    existing.title = next.title;
+    existing.servings = next.servings;
+    existing.updatedAt = next.updatedAt;
+    return existing;
+  }
+
+  state.plan.push(next);
+  return next;
+}
+
+function removePlanItems(planEntryId) {
+  if (!planEntryId) return 0;
+
+  const timestamp = nowIso();
+  let removed = 0;
+
+  for (const list of state.lists) {
+    let touched = false;
+    for (const item of list.items) {
+      if (
+        item.deletedAt ||
+        item.sourcePlanEntryId !== planEntryId ||
+        item.checked
+      ) {
+        continue;
+      }
+
+      item.deletedAt = timestamp;
+      item.updatedAt = timestamp;
+      removed += 1;
+      touched = true;
+    }
+
+    if (touched) touchList(list);
+  }
+
+  return removed;
+}
+
+function scaleQuantity(qty, recipeServings, plannedServings) {
+  if (qty === null || qty === undefined) return null;
+  const from = Number(recipeServings) || 1;
+  const to = Number(plannedServings) || from;
+  return normalizeQty(qty * (to / from));
+}
+
+function itemMatchKey(item) {
+  return `${String((item && item.name) || '')
+    .trim()
+    .toLowerCase()}|${String((item && item.unit) || '')
+    .trim()
+    .toLowerCase()}`;
 }
 
 function touchList(list) {

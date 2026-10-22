@@ -10,7 +10,8 @@ exporting/importing a JSON file. Hosted free on GitHub Pages.
 - **Sync:** manual export/import only (no server, no accounts, no network calls)
 
 **Status:** Phases 0–1 implemented, plus per-store lists, Google Calendar trip export, seeded
-recipes, item/recipe editing, and JSON backup/restore. Shopping polish is next.
+recipes, item/recipe editing, JSON backup/restore, and weekly meal planning. Shopping polish and
+list management is next.
 
 ---
 
@@ -66,9 +67,10 @@ recipes, item/recipe editing, and JSON backup/restore. Shopping polish is next.
 Bottom tab bar for Plan / List / Recipes / More.
 
 ### Signature flows
-- **Plan → shop:** "Generate list from this week's plan" scales each recipe's ingredients by
-  `planned servings / recipe servings`, merges duplicate name+unit pairs, and adds them to a chosen
-  list with a `sourceRecipeId` so items can be traced back.
+- **Plan → shop:** choosing a recipe for a slot immediately adds its ingredients to the selected
+  list, scaled by `planned servings / recipe servings`. Each item keeps `sourceRecipeId` and
+  `sourcePlanEntryId`, so changing or clearing that meal can remove its unchecked items without
+  touching checked ones. Custom/free-text meals stay on the plan without adding ingredients.
 - **Shop:** check items off one-handed; checked items sink to the bottom of their aisle; list
   survives app kill and offline reloads.
 - **Share:** export produces `grocery-planner-backup-YYYY-MM-DD.json`; send via
@@ -81,7 +83,7 @@ Bottom tab bar for Plan / List / Recipes / More.
   "format": "grocery-planner-backup",
   "formatVersion": 1,
   "schemaVersion": 1,
-  "appVersion": "0.6.0",
+  "appVersion": "0.7.0",
   "exportedAt": "2026-10-22T15:00:00.000Z",
   "state": {
     "recipes": [{
@@ -91,9 +93,9 @@ Bottom tab bar for Plan / List / Recipes / More.
       "createdAt": "...", "updatedAt": "...", "deletedAt": null
     }],
     "plan": [{
-      "id": "mp_1", "date": "2026-10-26", "slot": "dinner",
-      "recipeId": "rcp_1", "servings": 4, "note": null,
-      "createdAt": "...", "updatedAt": "...", "deletedAt": null
+      "id": "pln_1", "date": "2026-10-26", "slot": "dinner",
+      "recipeId": "rcp_1", "title": "Sheet-pan chicken", "servings": 4,
+      "createdAt": "...", "updatedAt": "..."
     }],
     "lists": [{
       "id": "lst_1", "name": "Costco", "storeKey": "costco",
@@ -102,7 +104,8 @@ Bottom tab bar for Plan / List / Recipes / More.
       "items": [{
         "id": "itm_1", "name": "chicken thighs", "qty": 2, "unit": "lb",
         "aisle": "Meat & Seafood", "checked": false, "note": null,
-        "sourceRecipeId": "rcp_1", "addedAt": "...", "updatedAt": "...", "deletedAt": null
+        "sourceRecipeId": "rcp_1", "sourcePlanEntryId": "pln_1",
+        "addedAt": "...", "updatedAt": "...", "deletedAt": null
       }]
     }],
     "settings": {
@@ -161,7 +164,9 @@ Everything else (Node 14, npm, Safari) is fine for this stack, since there is no
 │   ├── app.js              # boot, hash router, tab bar, network status
 │   ├── config.js           # name, version, schema version, aisles, store presets, storage keys
 │   ├── model.js            # factories, aisle keywords, normalization
+│   ├── dates.js            # local date keys, week starts, day arithmetic
 │   ├── calendar.js         # Google Calendar trip details + URL builder (pure)
+│   ├── backup.js           # JSON backup format, validation, restore
 │   ├── store.js            # state container, IndexedDB persistence, subscribe()
 │   ├── seed-recipes.js     # recipes imported from the meal-planning sheet
 │   ├── sheet.js            # shared bottom-sheet dialog controller
@@ -236,12 +241,14 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 - Still queued: reorder/duplicate recipes and scale ingredients by servings.
 - **Accept:** edit a seeded recipe and add its ingredients to a chosen list offline.
 
-### Phase 4 — Weekly meal plan + generate list (2 days)
+### Phase 4 — Weekly meal plan (done, v0.7.0)
 - Week view: 7 days × 3 slots, prev/next week, "today" jump; assign recipe or free text.
-- Servings per entry; copy last week; clear day.
-- "Generate list from plan": preview of merged items, dedupe against existing unchecked items,
-  confirm → add with `sourceRecipeId`.
-- **Accept:** plan 5 dinners, generate list, shop, check off; plan persists offline.
+- Servings per entry; copy last week into empty slots; clear day.
+- Choosing a recipe automatically adds scaled ingredients to the selected list with
+  `sourceRecipeId` and `sourcePlanEntryId`. Updating or clearing a meal removes only that meal's
+  unchecked items; checked items are kept.
+- **Accept:** plan 5 dinners, see their ingredients on the chosen list, shop, check off; plan
+  persists offline. Done: plan entries and automatic additions survive reload.
 
 ### Phase 5 — Two-phone merge (1–2 days)
 - Merge import (union by id, last-write-wins, tombstones), preview counts (new/updated/deleted).
