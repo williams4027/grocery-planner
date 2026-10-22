@@ -88,6 +88,7 @@ sw.js                   offline caching and update behaviour
 js/app.js               boot, hash router, tab state, network status
 js/config.js            app name, version, schema version, aisles, store presets, storage keys
 js/model.js             factories, aisle keyword map, ingredient parsing, normalization
+js/backup.js            JSON backup format, parsing, and validation
 js/calendar.js          pure Google Calendar trip-detail and URL builders
 js/store.js             state container, IndexedDB/localStorage persistence, actions
 js/seed-recipes.js      recipes seeded from the meal-planning sheet
@@ -121,6 +122,9 @@ PLAN.md                 product plan, data model, phase breakdown
   or edit a recipe’s title, category, and ingredient lines, including quantities; ingredient lines
   like “2 cups chopped carrots” are split into quantity, unit, and item name automatically.
 - Everything persists in IndexedDB on the device, survives force-quit, and works offline.
+- **Export backup** in More downloads a JSON copy of every list, item, recipe, and setting.
+  **Restore from file** validates the backup first, shows what it contains, and only replaces data
+  after you confirm. A corrupt or newer-version file is rejected without touching existing data.
 - Storage failures (private mode, quota) surface as a banner instead of failing silently.
 
 ## Data and privacy
@@ -130,9 +134,9 @@ PLAN.md                 product plan, data model, phase breakdown
 - The Google Calendar handoff is a normal link. The list is placed in the URL only when you tap
   **Open Google Calendar**, so nothing is sent until you choose to continue there.
 - **iPhone caveat:** Safari can evict site storage after about seven days of non-use. Installing to
-  the Home Screen protects against this. Export regularly once backup exists (Phase 2).
-- An exported file is plain JSON. Treat it like a photo of your shopping list, not a secret
-  document.
+  the Home Screen protects against this. Download a backup from More regularly and keep it in
+  Files or another safe place.
+- A backup is plain JSON. Treat it like a photo of your shopping list, not a secret document.
 
 ## Troubleshooting
 

@@ -436,3 +436,20 @@ export function normalizeState(input) {
 
   return state;
 }
+
+export function summarizeState(input) {
+  const lists = input && Array.isArray(input.lists) ? input.lists : [];
+  const items = lists.reduce((count, list) => {
+    if (!list || !Array.isArray(list.items)) return count;
+    return (
+      count +
+      list.items.filter((item) => item && !item.deletedAt && item.name).length
+    );
+  }, 0);
+  const recipes =
+    input && Array.isArray(input.recipes)
+      ? input.recipes.filter((recipe) => recipe && !recipe.deletedAt && recipe.title).length
+      : 0;
+
+  return { lists: lists.length, items, recipes };
+}

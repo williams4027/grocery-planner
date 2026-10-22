@@ -10,7 +10,7 @@ exporting/importing a JSON file. Hosted free on GitHub Pages.
 - **Sync:** manual export/import only (no server, no accounts, no network calls)
 
 **Status:** Phases 0–1 implemented, plus per-store lists, Google Calendar trip export, seeded
-recipes, and item/recipe editing. Backup/restore is next.
+recipes, item/recipe editing, and JSON backup/restore. Shopping polish is next.
 
 ---
 
@@ -71,16 +71,17 @@ Bottom tab bar for Plan / List / Recipes / More.
   list with a `sourceRecipeId` so items can be traced back.
 - **Shop:** check items off one-handed; checked items sink to the bottom of their aisle; list
   survives app kill and offline reloads.
-- **Share:** export produces `grocery-planner-YYYY-MM-DD.json`; send via AirDrop/iMessage/Files.
-  Import offers **Merge** (default) or **Replace**, with a preview of what will change.
+- **Share:** export produces `grocery-planner-backup-YYYY-MM-DD.json`; send via
+  AirDrop/iMessage/Files. Import validates and replaces after confirmation; merge is Phase 5.
 - **Backup nudge:** if no export in N days, show a dismissible banner on the list screen.
 
 ### Data model sketch
 ```json
 {
+  "format": "grocery-planner-backup",
+  "formatVersion": 1,
   "schemaVersion": 1,
-  "appVersion": "0.5.1",
-  "deviceId": "dev_ab12",
+  "appVersion": "0.6.0",
   "exportedAt": "2026-10-22T15:00:00.000Z",
   "state": {
     "recipes": [{
@@ -108,7 +109,8 @@ Bottom tab bar for Plan / List / Recipes / More.
       "weekStart": "sun",
       "aisleOrder": ["Produce", "Meat & Seafood", "Dairy", "Bakery", "Frozen", "Pantry", "Household", "Other"],
       "activeListId": "lst_1",
-      "theme": "system", "lastExportAt": null, "backupNudgeDays": 14
+      "theme": "system", "lastExportAt": null, "backupNudgeDays": 14,
+      "recipeSeedVersion": 1
     }
   }
 }
@@ -215,12 +217,14 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 - **Accept:** create three store lists, switch between them, reload, and open a prefilled trip event
   with the correct items and aisle order.
 
-### Phase 2 — Shopping mode + multi-list + manual backup (1–2 days)
+### Phase 2 — Backup/restore (done, v0.6.0) + shopping polish (queued)
+- **Export/import v1:** download JSON, import with Replace only; validation + error messages.
+- Settings screen with data counts, export button, and last-backup timestamp.
+- Backup files include every list, item, recipe, and setting; restores show a summary and require
+  confirmation. Corrupt or newer-version files are rejected atomically.
 - Shopping mode polish: 44px+ targets, checked items dim and sink, per-aisle progress, undo on
   delete, swipe-free (buttons only).
 - Multiple lists: duplicate, archive, and restore; list management beyond the store switcher.
-- **Export/import v1:** download JSON, import with Replace only; validation + error messages.
-- Settings screen with data counts, export button, last-export timestamp.
 - **Accept:** export on phone A → import on phone B → identical list. Import of a corrupt file
   fails safely without touching existing data.
 

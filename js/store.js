@@ -5,6 +5,7 @@
  */
 
 import { RECIPE_CATEGORIES, STORAGE } from './config.js';
+import { createBackup as buildBackup, parseBackup, readBackup } from './backup.js';
 import {
   createEmptyState,
   createItem,
@@ -14,6 +15,7 @@ import {
   normalizeState,
   nowIso,
   suggestAisle,
+  summarizeState,
 } from './model.js';
 import { RECIPE_SEED_VERSION, SEED_RECIPES } from './seed-recipes.js';
 
@@ -243,6 +245,48 @@ export function addRecipeToActiveList(recipeId) {
 
 export function getStorageInfo() {
   return { mode: storageMode, error: saveError || loadError };
+}
+
+export function getDataSummary() {
+  return summarizeState(state);
+}
+
+export function createBackup() {
+  return buildBackup(state);
+}
+
+export function recordExport(exportedAt = nowIso()) {
+  const timestamp =
+    typeof exportedAt === 'string' && !Number.isNaN(Date.parse(exportedAt))
+      ? exportedAt
+      : nowIso();
+  state.settings.lastExportAt = timestamp;
+  commit();
+  return timestamp;
+}
+
+export function inspectBackup(input) {
+  const parsed = typeof input === 'string' ? readBackup(input) : parseBackup(input);
+  return {
+    summary: parsed.summary,
+    exportedAt: parsed.exportedAt,
+    appVersion: parsed.appVersion,
+  };
+}
+
+export function importBackup(input) {
+  const parsed = typeof input === 'string' ? readBackup(input) : parseBackup(input);
+
+  state = parsed.state;
+  if (parsed.exportedAt) state.settings.lastExportAt = parsed.exportedAt;
+  loadError = '';
+  if (storageMode !== 'memory') saveError = '';
+  commit();
+
+  return {
+    summary: summarizeState(state),
+    exportedAt: parsed.exportedAt,
+  };
 }
 
 export function subscribe(listener) {
@@ -517,10 +561,14 @@ function idbPut(db, value) {
 
 /* ---------- Lifecycle ---------- */
 
-window.addEventListener('pagehide', () => {
-  flush();
-});
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', () => {
+    flush();
+  });
+}
 
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') flush();
-});
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flush();
+  });
+}

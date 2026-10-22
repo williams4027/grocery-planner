@@ -586,6 +586,16 @@ h2 {
   color: var(--accent-contrast);
 }
 
+.btn--danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.btn--danger:hover,
+.btn--danger:focus-visible {
+  background: var(--surface-2);
+}
+
 .btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -1235,6 +1245,28 @@ body.sheet-open {
   margin: 12px 0 0;
   color: var(--muted);
   font-size: 13px;
+}
+
+.restore-warning {
+  margin: 0 0 12px;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.backup-summary {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  font-size: 14px;
+  font-weight: 550;
+  line-height: 1.45;
+}
+
+.backup-buttons .btn,
+.backup-actions .btn {
+  flex: 1 1 140px;
 }
 
 /* ---------- Store lists + calendar handoff ---------- */
