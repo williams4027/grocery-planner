@@ -5,7 +5,7 @@
  */
 
 import { STORAGE } from './config.js';
-import { createEmptyState, createItem, normalizeState, nowIso } from './model.js';
+import { createEmptyState, createItem, createList, normalizeState, nowIso } from './model.js';
 
 let state = createEmptyState();
 let ready = false;
@@ -97,7 +97,34 @@ export function getState() {
 }
 
 export function getActiveList() {
-  return state.lists.find((list) => !list.archivedAt) || state.lists[0] || null;
+  const activeId = state.settings.activeListId;
+  return (
+    state.lists.find((list) => list.id === activeId && !list.archivedAt) ||
+    state.lists.find((list) => !list.archivedAt) ||
+    state.lists[0] ||
+    null
+  );
+}
+
+export function visibleLists() {
+  return state.lists.filter((list) => !list.archivedAt);
+}
+
+export function setActiveList(listId) {
+  const list = state.lists.find((entry) => entry.id === listId && !entry.archivedAt);
+  if (!list || state.settings.activeListId === list.id) return false;
+
+  state.settings.activeListId = list.id;
+  commit();
+  return true;
+}
+
+export function addList({ name, storeKey = 'custom', aisleOrder = null } = {}) {
+  const list = createList(name, { storeKey, aisleOrder });
+  state.lists.push(list);
+  state.settings.activeListId = list.id;
+  commit();
+  return list;
 }
 
 export function visibleItems(list) {

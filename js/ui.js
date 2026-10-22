@@ -30,6 +30,16 @@ export const ICONS = {
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="m6 6 12 12M18 6 6 18" />
     </svg>`,
+  calendar: `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+      <path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" />
+    </svg>`,
+  pencil: `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="m4.5 19.5 4.2-1 9.9-9.9a2.1 2.1 0 0 0-3-3L5.7 15.5l-1.2 4Z" />
+      <path d="m13.8 7.4 3 3" />
+    </svg>`,
 };
 
 /** Creates an element. Children may be nodes, strings, arrays, or null. */

@@ -9,7 +9,7 @@ exporting/importing a JSON file. Hosted free on GitHub Pages.
 - **Storage:** IndexedDB (single state document) with localStorage fallback
 - **Sync:** manual export/import only (no server, no accounts, no network calls)
 
-**Status:** Phases 0–1 implemented. Phase 2 is next.
+**Status:** Phases 0–1 implemented, plus per-store lists and Google Calendar trip export. Backup/restore is next.
 
 ---
 
@@ -50,13 +50,14 @@ exporting/importing a JSON file. Hosted free on GitHub Pages.
 | --- | --- |
 | **Recipe** | Title, servings, ingredient lines, steps, tags, optional source URL. |
 | **Meal plan entry** | Date + slot (breakfast/lunch/dinner) + recipe or free text + servings. |
-| **Grocery list** | Named list of items with aisle, quantity, checked state, notes. |
-| **Settings** | Aisle order, week start, theme, last-backup reminder. |
+| **Grocery list** | Named list of items with aisle, quantity, checked state, notes; optionally tied to a store layout. |
+| **Settings** | Aisle order, active list, week start, theme, last-backup reminder. |
 
 ### Main screens (hash routes)
 1. `#/plan` — current week grid (7 days × 3 slots), tap a slot to assign a recipe or text.
 2. `#/list` — active grocery list in shopping mode: grouped by aisle, big checkboxes, sticky
-   aisle headers, running "x of y picked" counter.
+   aisle headers, running "x of y picked" counter. Store chips switch between Kroger, Whole Foods,
+   Costco, and custom lists.
 3. `#/recipes` — recipe list + detail/edit.
 4. `#/lists` — all lists, create/rename/archive/duplicate.
 5. `#/settings` — aisle order, backup/restore, install help, data reset, app version.
@@ -93,8 +94,9 @@ Bottom tab bar for Plan / List / Recipes / More.
       "createdAt": "...", "updatedAt": "...", "deletedAt": null
     }],
     "lists": [{
-      "id": "lst_1", "name": "Week of Oct 26", "createdAt": "...", "updatedAt": "...",
-      "archivedAt": null,
+      "id": "lst_1", "name": "Costco", "storeKey": "costco",
+      "aisleOrder": ["Household", "Pantry", "Frozen", "Dairy", "Meat & Seafood", "Produce", "Bakery", "Other"],
+      "createdAt": "...", "updatedAt": "...", "archivedAt": null,
       "items": [{
         "id": "itm_1", "name": "chicken thighs", "qty": 2, "unit": "lb",
         "aisle": "Meat & Seafood", "checked": false, "note": null,
@@ -104,6 +106,7 @@ Bottom tab bar for Plan / List / Recipes / More.
     "settings": {
       "weekStart": "sun",
       "aisleOrder": ["Produce", "Meat & Seafood", "Dairy", "Bakery", "Frozen", "Pantry", "Household", "Other"],
+      "activeListId": "lst_1",
       "theme": "system", "lastExportAt": null, "backupNudgeDays": 14
     }
   }
@@ -118,7 +121,7 @@ not resurrect from the other phone's copy. Tombstones are pruned after ~90 days 
 ### Deliberate simplifications
 - Quantity is a number + free-text unit. Merging sums only when name and unit match exactly.
 - Aisle assignment is a small keyword map plus manual override; unmatched → "Other".
-- One active shopping list at a time, but history is kept.
+- One active shopping list at a time. Store lists are independent, each with its own aisle order.
 - No user auth. Anyone with the file has the data — treat exports like a photo, not a secret doc.
 
 ---
@@ -153,8 +156,9 @@ Everything else (Node 14, npm, Safari) is fine for this stack, since there is no
 ├── icons/                  # 192, 512, maskable 512, apple-touch 180
 ├── js/
 │   ├── app.js              # boot, hash router, tab bar, network status
-│   ├── config.js           # name, version, schema version, aisles, storage keys
+│   ├── config.js           # name, version, schema version, aisles, store presets, storage keys
 │   ├── model.js            # factories, aisle keywords, normalization
+│   ├── calendar.js         # Google Calendar trip details + URL builder (pure)
 │   ├── store.js            # state container, IndexedDB persistence, subscribe()
 │   ├── pwa.js              # service worker registration, update checks
 │   ├── io.js               # export, import, validation (Phase 2)
@@ -195,10 +199,19 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 - **Accept:** add 10 items, force-quit Safari, reopen — all still there, offline. No layout jank
   with the keyboard open on iPhone.
 
+### Phase 1.5 — Per-store lists + Google Calendar (done, v0.4.0)
+- Independent lists for Kroger, Whole Foods, Costco, and custom stores; store chips switch in one tap.
+- Presets set the list name and reorder existing aisles (no new categories).
+- `settings.activeListId` remembers the last list; old single-list data migrates silently.
+- **Calendar handoff:** a sheet collects title/date/time, then opens a prefilled Google Calendar
+  event with the list grouped by aisle in the description. No OAuth, no backend.
+- **Accept:** create three store lists, switch between them, reload, and open a prefilled trip event
+  with the correct items and aisle order.
+
 ### Phase 2 — Shopping mode + multi-list + manual backup (1–2 days)
 - Shopping mode polish: 44px+ targets, checked items dim and sink, per-aisle progress, undo on
   delete, swipe-free (buttons only).
-- Multiple lists: create, rename, duplicate, archive; "active list" selection.
+- Multiple lists: duplicate, archive, and restore; list management beyond the store switcher.
 - **Export/import v1:** download JSON, import with Replace only; validation + error messages.
 - Settings screen with data counts, export button, last-export timestamp.
 - **Accept:** export on phone A → import on phone B → identical list. Import of a corrupt file

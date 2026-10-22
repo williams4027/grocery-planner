@@ -1,10 +1,16 @@
-/* Grocery list view — Phase 1 */
+/* Grocery list view — per-store lists, aisle order, calendar handoff. */
 
+import { STORE_PRESETS } from '../config.js';
 import * as store from '../store.js';
+import { buildGoogleCalendarUrl } from '../calendar.js';
 import { h, icon, ICONS, showToast, formatQuantity } from '../ui.js';
+
+const PRESET_ORDER = ['kroger', 'wholefoods', 'costco', 'custom'];
 
 export function mount(root) {
   let renaming = false;
+  let selectedPreset = 'custom';
+  let lastActiveChipId = null;
   const viewport = window.visualViewport;
 
   root.innerHTML = `
@@ -13,8 +19,42 @@ export function mount(root) {
         <div id="name-slot"></div>
         <p class="list-count" id="list-count" aria-live="polite"></p>
       </div>
-      <button class="ghost-btn" id="rename-btn" type="button">Rename</button>
+      <div class="page-head__actions">
+        <button
+          class="icon-btn"
+          id="calendar-btn"
+          type="button"
+          aria-label="Add trip to Google Calendar"
+          title="Google Calendar"
+          aria-haspopup="dialog"
+          aria-controls="calendar-dialog"
+        >
+          ${ICONS.calendar}
+        </button>
+        <button
+          class="icon-btn"
+          id="rename-btn"
+          type="button"
+          aria-label="Rename list"
+          title="Rename list"
+        >
+          ${ICONS.pencil}
+        </button>
+      </div>
     </header>
+
+    <div class="list-bar">
+      <div id="list-chips" class="list-chips" role="group" aria-label="Store lists"></div>
+      <button
+        class="list-chip list-chip--new"
+        id="new-list-chip"
+        type="button"
+        aria-label="New list"
+        title="New list"
+      >
+        ${ICONS.plus}
+      </button>
+    </div>
 
     <div id="storage-warning" class="banner" role="status" hidden></div>
 
@@ -89,12 +129,92 @@ export function mount(root) {
 
       <p id="sheet-status" class="sheet__status" role="status" aria-live="polite"></p>
     </dialog>
+
+    <dialog id="new-list-dialog" class="sheet" aria-labelledby="new-list-title">
+      <div class="sheet__handle" aria-hidden="true"></div>
+      <div class="sheet__head">
+        <h2 id="new-list-title">New list</h2>
+        <button class="sheet__close" id="new-list-close" type="button" aria-label="Close">
+          ${ICONS.close}
+        </button>
+      </div>
+
+      <form id="new-list-form" class="new-list" autocomplete="off" novalidate>
+        <fieldset class="preset-field">
+          <legend class="field__label">Store layout</legend>
+          <div id="preset-chips" class="preset-chips"></div>
+        </fieldset>
+
+        <label class="field field--stacked">
+          <span class="field__label">List name</span>
+          <input
+            id="new-list-name"
+            class="add__name"
+            name="name"
+            type="text"
+            maxlength="60"
+            placeholder="e.g. Trader Joe&rsquo;s"
+            enterkeyhint="done"
+            autocapitalize="words"
+          />
+        </label>
+
+        <button class="btn btn--primary new-list__submit" type="submit">Create list</button>
+      </form>
+
+      <p id="new-list-status" class="sheet__status" role="status" aria-live="polite"></p>
+    </dialog>
+
+    <dialog id="calendar-dialog" class="sheet" aria-labelledby="calendar-title">
+      <div class="sheet__handle" aria-hidden="true"></div>
+      <div class="sheet__head">
+        <h2 id="calendar-title">Google Calendar trip</h2>
+        <button class="sheet__close" id="calendar-close" type="button" aria-label="Close">
+          ${ICONS.close}
+        </button>
+      </div>
+
+      <form id="calendar-form" class="calendar-form" autocomplete="off" novalidate>
+        <label class="field field--stacked">
+          <span class="field__label">Event title</span>
+          <input
+            id="calendar-event-title"
+            class="add__name"
+            name="title"
+            type="text"
+            maxlength="120"
+          />
+        </label>
+
+        <div class="calendar-form__row">
+          <label class="field field--stacked">
+            <span class="field__label">Date</span>
+            <input id="calendar-date" class="field__input" name="date" type="date" />
+          </label>
+          <label class="field field--stacked">
+            <span class="field__label">Time</span>
+            <input id="calendar-time" class="field__input" name="time" type="time" />
+          </label>
+        </div>
+
+        <p id="calendar-summary" class="calendar-form__note"></p>
+
+        <button class="btn btn--primary new-list__submit" type="submit">
+          Open Google Calendar
+        </button>
+      </form>
+
+      <p id="calendar-status" class="sheet__status" role="status" aria-live="polite"></p>
+    </dialog>
   `;
 
   const refs = {
     nameSlot: root.querySelector('#name-slot'),
     renameButton: root.querySelector('#rename-btn'),
+    calendarButton: root.querySelector('#calendar-btn'),
     count: root.querySelector('#list-count'),
+    chips: root.querySelector('#list-chips'),
+    newListChip: root.querySelector('#new-list-chip'),
     warning: root.querySelector('#storage-warning'),
     items: root.querySelector('#items'),
     fab: root.querySelector('#add-fab'),
@@ -105,6 +225,20 @@ export function mount(root) {
     qtyInput: root.querySelector('#add-qty'),
     unitInput: root.querySelector('#add-unit'),
     status: root.querySelector('#sheet-status'),
+    newListDialog: root.querySelector('#new-list-dialog'),
+    newListClose: root.querySelector('#new-list-close'),
+    newListForm: root.querySelector('#new-list-form'),
+    newListName: root.querySelector('#new-list-name'),
+    presetChips: root.querySelector('#preset-chips'),
+    newListStatus: root.querySelector('#new-list-status'),
+    calendarDialog: root.querySelector('#calendar-dialog'),
+    calendarClose: root.querySelector('#calendar-close'),
+    calendarForm: root.querySelector('#calendar-form'),
+    calendarEventTitle: root.querySelector('#calendar-event-title'),
+    calendarDate: root.querySelector('#calendar-date'),
+    calendarTime: root.querySelector('#calendar-time'),
+    calendarSummary: root.querySelector('#calendar-summary'),
+    calendarStatus: root.querySelector('#calendar-status'),
   };
 
   function currentList() {
@@ -115,13 +249,17 @@ export function mount(root) {
     renderWarning();
 
     const list = currentList();
+    renderChips();
+
     if (!list) {
       refs.nameSlot.replaceChildren(h('h1', { class: 'page-title' }, 'Groceries'));
       refs.count.textContent = '';
       refs.items.replaceChildren();
+      refs.calendarButton.disabled = true;
       return;
     }
 
+    refs.calendarButton.disabled = false;
     renderName(list);
     renderCount(list);
     renderItems(list);
@@ -137,6 +275,53 @@ export function mount(root) {
 
     refs.warning.hidden = !message;
     refs.warning.textContent = message;
+  }
+
+  function renderChips() {
+    const list = currentList();
+    const activeChipId = list ? `chip-${list.id}` : null;
+    const shouldReveal = activeChipId !== lastActiveChipId;
+    lastActiveChipId = activeChipId;
+
+    const focusedId = document.activeElement && document.activeElement.id;
+    const chips = store.visibleLists().map((entry) =>
+      h(
+        'button',
+        {
+          class: `list-chip${entry.id === (list && list.id) ? ' is-active' : ''}`,
+          id: `chip-${entry.id}`,
+          type: 'button',
+          dataset: { listId: entry.id },
+          'aria-pressed': entry.id === (list && list.id) ? 'true' : 'false',
+        },
+        entry.name
+      )
+    );
+
+    const scrollLeft = refs.chips.scrollLeft;
+    refs.chips.replaceChildren(...chips);
+    refs.chips.scrollLeft = scrollLeft;
+
+    if (focusedId) {
+      const next = document.getElementById(focusedId);
+      if (next) next.focus({ preventScroll: true });
+    }
+
+    if (shouldReveal) {
+      const active = refs.chips.querySelector('.list-chip.is-active');
+      if (active) revealChip(active);
+    }
+  }
+
+  function revealChip(chip) {
+    const chipRect = chip.getBoundingClientRect();
+    const listRect = refs.chips.getBoundingClientRect();
+
+    if (chipRect.left < listRect.left) {
+      refs.chips.scrollLeft -= listRect.left - chipRect.left + 6;
+    } else if (chipRect.right > listRect.right) {
+      refs.chips.scrollLeft += chipRect.right - listRect.right + 6;
+    }
   }
 
   function renderName(list) {
@@ -175,6 +360,8 @@ export function mount(root) {
 
     input.addEventListener('blur', commitRename);
     refs.nameSlot.replaceChildren(input);
+    input.focus();
+    input.select();
     requestAnimationFrame(() => {
       input.focus();
       input.select();
@@ -187,9 +374,9 @@ export function mount(root) {
     renaming = false;
     const list = currentList();
     const value = event.target.value.trim();
+    const changed = list && value ? store.renameList(list.id, value) : false;
 
-    if (list && value) store.renameList(list.id, value);
-    render();
+    if (!changed) render();
   }
 
   function renderCount(list) {
@@ -220,7 +407,10 @@ export function mount(root) {
       return;
     }
 
-    const order = store.getState().settings.aisleOrder;
+    const order =
+      Array.isArray(list.aisleOrder) && list.aisleOrder.length
+        ? list.aisleOrder
+        : store.getState().settings.aisleOrder;
     const buckets = new Map();
 
     for (const item of visible) {
@@ -297,69 +487,144 @@ export function mount(root) {
     );
   }
 
-  /* ---------- Add sheet ---------- */
+  /* ---------- Sheets ---------- */
 
-  let sheetFinalized = true;
+  const openDialogs = new Set();
+
+  function syncSheetLock() {
+    document.body.classList.toggle('sheet-open', openDialogs.size > 0);
+  }
 
   function syncViewportGap() {
-    if (!viewport || !refs.dialog.open) return;
+    if (!viewport) return;
 
     const gap = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
-    refs.dialog.style.setProperty('--keyboard-gap', `${Math.round(gap)}px`);
+    for (const dialog of openDialogs) {
+      dialog.style.setProperty('--keyboard-gap', `${Math.round(gap)}px`);
+    }
   }
 
-  function finalizeClose() {
-    if (sheetFinalized) return;
-
-    sheetFinalized = true;
-    document.body.classList.remove('sheet-open');
-    refs.dialog.style.removeProperty('--keyboard-gap');
-    refs.status.textContent = '';
-    refs.fab.focus({ preventScroll: true });
+  function resolveTarget(value) {
+    return typeof value === 'function' ? value() : value;
   }
 
-  function openSheet() {
-    if (refs.dialog.open) return;
+  function createSheetController(dialog, options = {}) {
+    const { trigger, initialFocus, selectOnOpen = false, onOpen, onClose } = options;
+    let finalized = true;
 
-    refs.dialog.showModal();
-    sheetFinalized = false;
-    document.body.classList.add('sheet-open');
-    syncViewportGap();
+    function focusTrigger() {
+      const target = resolveTarget(trigger);
+      if (target && target.isConnected) target.focus({ preventScroll: true });
+    }
 
-    requestAnimationFrame(() => {
-      refs.nameInput.focus({ preventScroll: true });
-      refs.nameInput.select();
+    function finalize() {
+      if (finalized) return;
+
+      finalized = true;
+      openDialogs.delete(dialog);
+      dialog.style.removeProperty('--keyboard-gap');
+      syncSheetLock();
+      if (onClose) onClose();
+
+      // Let the native dialog finish restoring focus first, then put it where
+      // this view wants it (for example, the newly active list chip).
+      setTimeout(focusTrigger, 0);
+    }
+
+    function open() {
+      if (dialog.open) return;
+
+      dialog.showModal();
+      finalized = false;
+      openDialogs.add(dialog);
+      syncSheetLock();
+      syncViewportGap();
+      if (onOpen) onOpen();
+
+      const focusInitial = () => {
+        const target = resolveTarget(initialFocus);
+        if (!target) return;
+        target.focus({ preventScroll: true });
+        if (selectOnOpen && typeof target.select === 'function') target.select();
+      };
+
+      focusInitial();
+      requestAnimationFrame(focusInitial);
+    }
+
+    function close() {
+      if (dialog.open) dialog.close();
+      finalize();
+    }
+
+    function destroy() {
+      finalized = true;
+      if (dialog.open) dialog.close();
+      openDialogs.delete(dialog);
+      dialog.style.removeProperty('--keyboard-gap');
+    }
+
+    dialog.addEventListener('close', finalize);
+    dialog.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      close();
     });
+    dialog.addEventListener('click', (event) => {
+      // Clicks on buttons and fields bubble here. Only a click that lands on
+      // the dialog itself can be a backdrop click; this also keeps keyboard
+      // activation (whose synthetic click is at 0,0) from closing the sheet.
+      if (event.target !== dialog) return;
+
+      const rect = dialog.getBoundingClientRect();
+      const outside =
+        event.clientX < rect.left ||
+        event.clientX > rect.right ||
+        event.clientY < rect.top ||
+        event.clientY > rect.bottom;
+
+      if (outside) close();
+    });
+
+    return { open, close, destroy, isOpen: () => dialog.open };
   }
 
-  function closeSheet() {
-    if (refs.dialog.open) refs.dialog.close();
-    finalizeClose();
-  }
-
-  refs.fab.addEventListener('click', openSheet);
-  refs.closeButton.addEventListener('click', closeSheet);
-
-  refs.dialog.addEventListener('click', (event) => {
-    const rect = refs.dialog.getBoundingClientRect();
-    const outside =
-      event.clientX < rect.left ||
-      event.clientX > rect.right ||
-      event.clientY < rect.top ||
-      event.clientY > rect.bottom;
-
-    if (outside) closeSheet();
+  const addSheet = createSheetController(refs.dialog, {
+    trigger: () => refs.fab,
+    initialFocus: () => refs.nameInput,
+    selectOnOpen: true,
+    onClose: () => {
+      refs.status.textContent = '';
+    },
   });
 
-  refs.dialog.addEventListener('close', finalizeClose);
-  refs.dialog.addEventListener('cancel', () => {
-    setTimeout(finalizeClose, 0);
+  const newListSheet = createSheetController(refs.newListDialog, {
+    trigger: () => root.querySelector('.list-chip.is-active') || refs.newListChip,
+    initialFocus: () => refs.newListName,
+    selectOnOpen: true,
+    onOpen: prepareNewListSheet,
+    onClose: () => {
+      refs.newListStatus.textContent = '';
+    },
+  });
+
+  const calendarSheet = createSheetController(refs.calendarDialog, {
+    trigger: () => refs.calendarButton,
+    initialFocus: () => refs.calendarEventTitle,
+    onOpen: populateCalendarSheet,
+    onClose: () => {
+      refs.calendarStatus.textContent = '';
+    },
   });
 
   if (viewport) {
     viewport.addEventListener('resize', syncViewportGap);
     viewport.addEventListener('scroll', syncViewportGap);
   }
+
+  /* ---------- Add sheet ---------- */
+
+  refs.fab.addEventListener('click', () => addSheet.open());
+  refs.closeButton.addEventListener('click', () => addSheet.close());
 
   refs.form.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -383,6 +648,164 @@ export function mount(root) {
     refs.status.textContent = `Added ${name}.`;
     refs.nameInput.focus({ preventScroll: true });
   });
+
+  /* ---------- List chips ---------- */
+
+  refs.chips.addEventListener('click', (event) => {
+    const chip = event.target.closest('button[data-list-id]');
+    if (!chip) return;
+
+    if (store.setActiveList(chip.dataset.listId)) {
+      window.scrollTo({ top: 0 });
+    }
+  });
+
+  refs.newListChip.addEventListener('click', () => newListSheet.open());
+
+  /* ---------- New list sheet ---------- */
+
+  function prepareNewListSheet() {
+    const existing = new Set(store.visibleLists().map((list) => list.storeKey));
+    selectedPreset =
+      ['kroger', 'wholefoods', 'costco'].find((key) => !existing.has(key)) || 'custom';
+
+    renderPresetChips();
+    refs.newListName.value =
+      selectedPreset === 'custom' ? '' : STORE_PRESETS[selectedPreset].name;
+    refs.newListStatus.textContent = '';
+  }
+
+  function renderPresetChips() {
+    refs.presetChips.replaceChildren(
+      ...PRESET_ORDER.map((key) => {
+        const preset = STORE_PRESETS[key];
+        if (!preset) return null;
+
+        return h(
+          'button',
+          {
+            class: `preset-chip${selectedPreset === key ? ' is-selected' : ''}`,
+            type: 'button',
+            dataset: { preset: key },
+            'aria-pressed': selectedPreset === key ? 'true' : 'false',
+          },
+          preset.label
+        );
+      }).filter(Boolean)
+    );
+  }
+
+  refs.presetChips.addEventListener('click', (event) => {
+    const chip = event.target.closest('button[data-preset]');
+    if (!chip) return;
+
+    const key = chip.dataset.preset;
+    if (!STORE_PRESETS[key]) return;
+
+    selectedPreset = key;
+    renderPresetChips();
+    refs.newListName.value = key === 'custom' ? '' : STORE_PRESETS[key].name;
+    refs.newListStatus.textContent = '';
+    refs.newListName.focus({ preventScroll: true });
+    refs.newListName.select();
+  });
+
+  refs.newListClose.addEventListener('click', () => newListSheet.close());
+
+  refs.newListForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+
+    const name = refs.newListName.value.trim();
+    if (!name) {
+      refs.newListStatus.textContent = 'Give the list a name.';
+      refs.newListName.focus();
+      return;
+    }
+
+    const preset = STORE_PRESETS[selectedPreset] || STORE_PRESETS.custom;
+    const list = store.addList({
+      name,
+      storeKey: selectedPreset,
+      aisleOrder: preset.aisleOrder,
+    });
+
+    newListSheet.close();
+    showToast(`${list.name} list created.`);
+  });
+
+  /* ---------- Calendar sheet ---------- */
+
+  function todayInputValue() {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+      now.getDate()
+    ).padStart(2, '0')}`;
+  }
+
+  function populateCalendarSheet() {
+    const list = currentList();
+    if (!list) return;
+
+    const items = store.visibleItems(list);
+    const picked = items.filter((item) => item.checked).length;
+
+    refs.calendarEventTitle.value = `${list.name} run`;
+    refs.calendarDate.value = todayInputValue();
+    refs.calendarTime.value = '17:00';
+    refs.calendarSummary.textContent = `${items.length} item${
+      items.length === 1 ? '' : 's'
+    } will go in the event description${
+      picked ? ` (${picked} already picked)` : ''
+    }. You can still edit the event in Google Calendar.`;
+    refs.calendarStatus.textContent = '';
+  }
+
+  refs.calendarButton.addEventListener('click', () => {
+    const list = currentList();
+    if (!list) return;
+
+    if (!store.visibleItems(list).length) {
+      showToast('Add items before creating a trip.');
+      return;
+    }
+
+    calendarSheet.open();
+  });
+
+  refs.calendarClose.addEventListener('click', () => calendarSheet.close());
+
+  refs.calendarForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+
+    const list = currentList();
+    if (!list) return;
+
+    const title = refs.calendarEventTitle.value.trim();
+    const date = refs.calendarDate.value;
+    const time = refs.calendarTime.value;
+
+    if (!title) {
+      refs.calendarStatus.textContent = 'Give the event a title.';
+      refs.calendarEventTitle.focus();
+      return;
+    }
+
+    if (!date || !time) {
+      refs.calendarStatus.textContent = 'Choose a date and time.';
+      return;
+    }
+
+    try {
+      const url = buildGoogleCalendarUrl({ list, title, date, time });
+      window.open(url, '_blank', 'noopener,noreferrer');
+      calendarSheet.close();
+      showToast('Opening Google Calendar…');
+    } catch (error) {
+      refs.calendarStatus.textContent = error.message || 'Could not create the event.';
+    }
+  });
+
+  /* ---------- List items ---------- */
 
   refs.items.addEventListener('change', (event) => {
     const checkbox = event.target.closest('input[data-action="toggle"]');
@@ -419,9 +842,11 @@ export function mount(root) {
 
   return () => {
     unsubscribe();
-
-    if (refs.dialog.open) refs.dialog.close();
-    finalizeClose();
+    addSheet.destroy();
+    newListSheet.destroy();
+    calendarSheet.destroy();
+    openDialogs.clear();
+    syncSheetLock();
 
     if (viewport) {
       viewport.removeEventListener('resize', syncViewportGap);

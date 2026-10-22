@@ -1,6 +1,6 @@
 /* Data model, defaults, and pure helpers. No DOM, no persistence. */
 
-import { AISLES, SCHEMA_VERSION } from './config.js';
+import { AISLES, SCHEMA_VERSION, STORE_PRESETS } from './config.js';
 
 const AISLE_KEYWORDS = [
   ['Frozen', ['frozen', 'ice cream', 'popsicle', 'frozen pizza']],
@@ -40,9 +40,7 @@ export function suggestAisle(name) {
 
   for (const [aisle, words] of AISLE_KEYWORDS) {
     for (const word of words) {
-      if (word.includes(' ')) {
-        if (text.includes(` ${word} `)) return aisle;
-      } else if (text.includes(` ${word} `) || text.includes(` ${word}s `)) {
+      if (text.includes(` ${word} `) || text.includes(` ${word}s `)) {
         return aisle;
       }
     }
@@ -51,11 +49,28 @@ export function suggestAisle(name) {
   return 'Other';
 }
 
-export function createList(name = 'Groceries') {
+/** Keeps every known aisle once, in the supplied order, then fills in the rest. */
+export function normalizeAisleOrder(input) {
+  const provided = Array.isArray(input) ? input.filter((aisle) => AISLES.includes(aisle)) : [];
+  return [...new Set([...provided, ...AISLES])];
+}
+
+function normalizeStoreKey(value) {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(STORE_PRESETS, value)
+    ? value
+    : 'custom';
+}
+
+export function createList(name = 'Groceries', { storeKey = 'custom', aisleOrder = null } = {}) {
   const timestamp = nowIso();
+  const key = normalizeStoreKey(storeKey);
+  const preset = STORE_PRESETS[key];
+
   return {
     id: uid('lst'),
-    name: String(name || '').trim() || 'Groceries',
+    name: String(name || '').trim() || preset.name,
+    storeKey: key,
+    aisleOrder: normalizeAisleOrder(aisleOrder || preset.aisleOrder),
     createdAt: timestamp,
     updatedAt: timestamp,
     archivedAt: null,
@@ -86,14 +101,18 @@ export function createItem({ name, qty = null, unit = '', aisle = null } = {}) {
 
 export function createEmptyState() {
   const timestamp = nowIso();
+  const list = createList('Groceries');
+  const settings = defaultSettings();
+  settings.activeListId = list.id;
+
   return {
     schemaVersion: SCHEMA_VERSION,
     createdAt: timestamp,
     updatedAt: timestamp,
-    lists: [createList('Groceries')],
+    lists: [list],
     recipes: [],
     plan: [],
-    settings: defaultSettings(),
+    settings,
   };
 }
 
@@ -101,6 +120,7 @@ function defaultSettings() {
   return {
     weekStart: 'sun',
     aisleOrder: [...AISLES],
+    activeListId: null,
     theme: 'system',
     lastExportAt: null,
     backupNudgeDays: 14,
@@ -115,7 +135,11 @@ function normalizeSettings(input) {
 
   return {
     weekStart: settings.weekStart === 'mon' ? 'mon' : 'sun',
-    aisleOrder: [...new Set([...provided, ...AISLES])],
+    aisleOrder: normalizeAisleOrder(provided),
+    activeListId:
+      typeof settings.activeListId === 'string' && settings.activeListId
+        ? settings.activeListId
+        : null,
     theme: ['system', 'light', 'dark'].includes(settings.theme) ? settings.theme : 'system',
     lastExportAt: typeof settings.lastExportAt === 'string' ? settings.lastExportAt : null,
     backupNudgeDays:
@@ -154,17 +178,25 @@ function normalizeItem(input) {
   };
 }
 
-function normalizeList(input) {
+function normalizeList(input, fallbackAisleOrder = null) {
   if (!input || typeof input !== 'object') return null;
 
   const timestamp = nowIso();
   const items = Array.isArray(input.items)
     ? input.items.map(normalizeItem).filter(Boolean)
     : [];
+  const storeKey = normalizeStoreKey(input.storeKey);
+  const preset = STORE_PRESETS[storeKey];
+  const aisleOrder =
+    Array.isArray(input.aisleOrder) && input.aisleOrder.length
+      ? input.aisleOrder
+      : fallbackAisleOrder || preset.aisleOrder;
 
   return {
     id: typeof input.id === 'string' && input.id ? input.id : uid('lst'),
-    name: String(input.name || '').trim() || 'Groceries',
+    name: String(input.name || '').trim() || preset.name,
+    storeKey,
+    aisleOrder: normalizeAisleOrder(aisleOrder),
     createdAt: typeof input.createdAt === 'string' ? input.createdAt : timestamp,
     updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : timestamp,
     archivedAt: typeof input.archivedAt === 'string' ? input.archivedAt : null,
@@ -187,17 +219,35 @@ export function normalizeState(input) {
   }
 
   const timestamp = nowIso();
+  const settings = normalizeSettings(input.settings);
+  const lists = Array.isArray(input.lists)
+    ? input.lists.map((list) => normalizeList(list, settings.aisleOrder)).filter(Boolean)
+    : [];
+
   const state = {
     schemaVersion: SCHEMA_VERSION,
     createdAt: typeof input.createdAt === 'string' ? input.createdAt : timestamp,
     updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : timestamp,
-    lists: Array.isArray(input.lists) ? input.lists.map(normalizeList).filter(Boolean) : [],
+    lists,
     recipes: Array.isArray(input.recipes) ? input.recipes : [],
     plan: Array.isArray(input.plan) ? input.plan : [],
-    settings: normalizeSettings(input.settings),
+    settings,
   };
 
-  if (!state.lists.length) state.lists.push(createList('Groceries'));
+  if (!state.lists.length) {
+    const list = createList('Groceries');
+    state.lists.push(list);
+    state.settings.activeListId = list.id;
+    return state;
+  }
+
+  const active = state.lists.find(
+    (list) => list.id === state.settings.activeListId && !list.archivedAt
+  );
+  if (!active) {
+    const firstVisible = state.lists.find((list) => !list.archivedAt) || state.lists[0];
+    state.settings.activeListId = firstVisible.id;
+  }
 
   return state;
 }

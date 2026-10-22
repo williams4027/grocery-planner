@@ -11,7 +11,8 @@ be installed from Safari on an iPhone.
 - **Free hosting.** GitHub Pages on a custom domain: `https://cheers-studios.com/grocery-planner/`
   (the `williams4027.github.io` URL redirects there).
 
-Status: **Phase 1 — persistent grocery list.** See [PLAN.md](./PLAN.md) for the full roadmap.
+Status: **Phase 1 plus per-store lists and Google Calendar trip export.** Backup/restore is next.
+See [PLAN.md](./PLAN.md) for the full roadmap.
 
 ## Quick start
 
@@ -85,8 +86,9 @@ app.css                 design tokens, layout, list styles
 manifest.webmanifest    install metadata and icons
 sw.js                   offline caching and update behaviour
 js/app.js               boot, hash router, tab state, network status
-js/config.js            app name, version, schema version, aisles, storage keys
+js/config.js            app name, version, schema version, aisles, store presets, storage keys
 js/model.js             factories, aisle keyword map, normalization
+js/calendar.js          pure Google Calendar trip-detail and URL builders
 js/store.js             state container, IndexedDB/localStorage persistence, actions
 js/ui.js                DOM helper, icons, toast
 js/pwa.js               service worker registration and update checks
@@ -99,12 +101,17 @@ PLAN.md                 product plan, data model, phase breakdown
 
 ## What works today
 
+- Keep separate lists for **Kroger, Whole Foods, Costco**, or a custom store; switch with the chips
+  above the list. Each store has its own aisle order, and the active list is remembered.
 - Add items from a floating **Add item** button anywhere in the list; the sheet stays open for
   batch entry.
 - Add items with an optional quantity and unit; delete with one tap.
 - Automatic aisle grouping (produce, dairy, pantry, …) with sticky headers.
 - Check items off; picked items sink within their aisle and the counter updates.
-- Rename the list inline.
+- Rename the active list inline.
+- **Add trip to Google Calendar** opens a prefilled event with the list in the description. It is a
+  link, not an account connection: you pick the title/date/time, then review and save it in Google
+  Calendar.
 - Everything persists in IndexedDB on the device, survives force-quit, and works offline.
 - Storage failures (private mode, quota) surface as a banner instead of failing silently.
 
@@ -112,6 +119,8 @@ PLAN.md                 product plan, data model, phase breakdown
 
 - There is no analytics, no third-party script, and no network request after the initial load.
 - Data will live in one IndexedDB document on the device (plus a localStorage fallback).
+- The Google Calendar handoff is a normal link. The list is placed in the URL only when you tap
+  **Open Google Calendar**, so nothing is sent until you choose to continue there.
 - **iPhone caveat:** Safari can evict site storage after about seven days of non-use. Installing to
   the Home Screen protects against this. Export regularly once backup exists (Phase 2).
 - An exported file is plain JSON. Treat it like a photo of your shopping list, not a secret

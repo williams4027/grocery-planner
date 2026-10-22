@@ -13,6 +13,7 @@ const MODE_LABELS = {
 export function mount(root) {
   const info = store.getStorageInfo();
   const list = store.getActiveList();
+  const lists = store.visibleLists();
   const itemCount = store.visibleItems(list).length;
 
   root.innerHTML = `
@@ -22,11 +23,12 @@ export function mount(root) {
     <section class="card" aria-labelledby="build-title">
       <div class="card__head">
         <h2 id="build-title">This build</h2>
-        <span class="badge">Phase 1</span>
+        <span class="badge">Lists + calendar</span>
       </div>
       <ul class="rows">
         <li><span class="row__label">Version</span><span class="row__value">${VERSION}</span></li>
-        <li><span class="row__label">Items on list</span><span class="row__value">${itemCount}</span></li>
+        <li><span class="row__label">Lists</span><span class="row__value">${lists.length}</span></li>
+        <li><span class="row__label">Items on active list</span><span class="row__value">${itemCount}</span></li>
         <li><span class="row__label">Storage</span><span class="row__value">${MODE_LABELS[info.mode] || info.mode}</span></li>
         <li><span class="row__label">Sharing</span><span class="row__value">Export / import (Phase 2)</span></li>
       </ul>
@@ -34,7 +36,8 @@ export function mount(root) {
         <button class="btn" id="check-updates" type="button">Check for updates</button>
       </div>
       <p class="card__note">
-        No accounts and no server. Nothing leaves this device unless you export it.
+        No accounts and no server. Nothing leaves this device unless you export it or hand a
+        trip to Google Calendar.
       </p>
     </section>
 
@@ -71,8 +74,9 @@ export function mount(root) {
       </div>
       <ul class="roadmap">
         <li class="is-done"><span class="roadmap__dot"></span>Phase 0 — installable shell</li>
-        <li class="is-current"><span class="roadmap__dot"></span>Phase 1 — grocery list that persists</li>
-        <li><span class="roadmap__dot"></span>Phase 2 — backup and restore</li>
+        <li class="is-done"><span class="roadmap__dot"></span>Phase 1 — grocery list that persists</li>
+        <li class="is-done"><span class="roadmap__dot"></span>Per-store lists and Google Calendar trips</li>
+        <li class="is-current"><span class="roadmap__dot"></span>Phase 2 — backup and restore</li>
         <li><span class="roadmap__dot"></span>Phase 3 — recipes</li>
         <li><span class="roadmap__dot"></span>Phase 4 — meal plan and list generation</li>
         <li><span class="roadmap__dot"></span>Phase 5 — merge between two phones</li>

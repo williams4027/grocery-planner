@@ -1197,6 +1197,218 @@ body.sheet-open {
   font-size: 13px;
 }
 
+/* ---------- Store lists + calendar handoff ---------- */
+
+.page-head__actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.icon-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.icon-btn svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.list-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -2px 0 14px;
+}
+
+.list-chips {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 8px;
+  padding: 2px 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.list-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.list-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 190px;
+  min-height: 36px;
+  flex: none;
+  padding: 6px 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.list-chip.is-active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.list-chip:focus-visible {
+  border-radius: 999px;
+  outline-offset: -2px;
+}
+
+.list-chip.is-active:focus-visible {
+  outline-color: var(--accent-contrast);
+}
+
+.icon-btn:focus-visible,
+.preset-chip:focus-visible {
+  border-radius: 999px;
+}
+
+.list-chip--new {
+  width: 40px;
+  padding: 0;
+  justify-content: center;
+  border-style: dashed;
+  background: transparent;
+  color: var(--accent);
+}
+
+.list-chip--new svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.preset-field {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.preset-field legend {
+  margin-bottom: 8px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.preset-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.preset-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 550;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.preset-chip.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.field--stacked {
+  display: grid;
+  align-items: start;
+  gap: 6px;
+}
+
+.field--stacked .field__label {
+  font-size: 12px;
+}
+
+.field--stacked .add__name,
+.field--stacked .field__input {
+  height: 46px;
+}
+
+.new-list,
+.calendar-form {
+  display: grid;
+  gap: 15px;
+}
+
+.new-list__submit {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 1px;
+}
+
+.calendar-form__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.calendar-form__row .field {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.calendar-form__note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 @media (min-width: 640px) {
   .sheet {
     margin-bottom: 24px;
@@ -1206,7 +1418,9 @@ body.sheet-open {
 
 @media print {
   .fab,
-  .sheet {
+  .sheet,
+  .list-bar,
+  .page-head__actions {
     display: none !important;
   }
 
