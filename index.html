@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Grocery Planner</title>
+    <meta
+      name="description"
+      content="Plan meals for the week and shop from a grocery list that works offline."
+    />
+
+    <meta name="theme-color" content="#f6f3ea" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0f1411" media="(prefers-color-scheme: dark)" />
+
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icons/icon-192.png" sizes="192x192" type="image/png" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Groceries" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <link rel="stylesheet" href="./app.css" />
+    <script type="module" src="./js/app.js"></script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <div class="app">
+      <header class="topbar">
+        <div class="topbar__inner">
+          <div class="brand">
+            <span class="brand__mark" aria-hidden="true">GP</span>
+            <span class="brand__name">Grocery Planner</span>
+          </div>
+          <p id="net-status" class="status" role="status" hidden>Offline</p>
+        </div>
+      </header>
+
+      <main id="main" class="main">
+        <div id="view" class="view" aria-live="polite"></div>
+      </main>
+
+      <nav class="tabbar" aria-label="Primary">
+        <div class="tabbar__inner">
+          <a href="#/plan" data-route="plan">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+              <path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" />
+            </svg>
+            <span>Plan</span>
+          </a>
+          <a href="#/list" data-route="list">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M4 6.5h2.2l1.9 9.2h9.6l2-6.9H7.2" />
+              <circle cx="10" cy="19.2" r="1.4" />
+              <circle cx="17" cy="19.2" r="1.4" />
+            </svg>
+            <span>List</span>
+          </a>
+          <a href="#/recipes" data-route="recipes">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M5 4.5h9.5A2.5 2.5 0 0 1 17 7v12.5H7.5A2.5 2.5 0 0 1 5 17V4.5Z" />
+              <path d="M8.5 8.5h5M8.5 12h5M8.5 15.5h3" />
+            </svg>
+            <span>Recipes</span>
+          </a>
+          <a href="#/more" data-route="more">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="12" cy="12" r="8.5" />
+              <path d="M12 11v5.5M12 7.6v.2" />
+            </svg>
+            <span>More</span>
+          </a>
+        </div>
+      </nav>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+    <noscript>
+      <p class="noscript">Grocery Planner needs JavaScript to run. Please enable it and reload.</p>
+    </noscript>
+  </body>
+</html>
