@@ -8,7 +8,7 @@
  * IMPORTANT: bump VERSION whenever you deploy so phones pick up new files.
  */
 
-const VERSION = '0.7.0';
+const VERSION = '0.8.0';
 const SHELL_CACHE = `gp-shell-${VERSION}`;
 const RUNTIME_CACHE = `gp-runtime-${VERSION}`;
 

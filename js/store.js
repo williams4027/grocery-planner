@@ -478,6 +478,20 @@ export function deleteItem(listId, itemId) {
   return true;
 }
 
+export function restoreItem(listId, itemId) {
+  const list = state.lists.find((entry) => entry.id === listId);
+  if (!list) return null;
+
+  const item = list.items.find((entry) => entry.id === itemId && entry.deletedAt);
+  if (!item) return null;
+
+  item.deletedAt = null;
+  item.updatedAt = nowIso();
+  touchList(list);
+  commit();
+  return item;
+}
+
 export function renameList(listId, name) {
   const list = state.lists.find((entry) => entry.id === listId);
   const cleanName = String(name || '')
@@ -490,6 +504,72 @@ export function renameList(listId, name) {
   touchList(list);
   commit();
   return true;
+}
+
+/** Copies a list and its visible items, preserving checked state. */
+export function duplicateList(listId) {
+  const source = state.lists.find((entry) => entry.id === listId);
+  if (!source) return null;
+
+  const copy = createList(uniqueListName(`${source.name} copy`), {
+    storeKey: source.storeKey,
+    aisleOrder: source.aisleOrder,
+  });
+
+  copy.items = source.items
+    .filter((item) => !item.deletedAt && item.name)
+    .map((sourceItem) => {
+      const item = createItem({
+        name: sourceItem.name,
+        qty: sourceItem.qty,
+        unit: sourceItem.unit,
+        aisle: sourceItem.aisle,
+        sourceRecipeId: sourceItem.sourceRecipeId,
+      });
+
+      item.checked = Boolean(sourceItem.checked);
+      item.note = typeof sourceItem.note === 'string' ? sourceItem.note : null;
+      item.addedAt = sourceItem.addedAt;
+      // The copy is a snapshot, not another owner of a planned meal's items.
+      item.sourcePlanEntryId = null;
+      return item;
+    });
+
+  state.lists.push(copy);
+  state.settings.activeListId = copy.id;
+  commit();
+  return copy;
+}
+
+export function archiveList(listId) {
+  const list = state.lists.find((entry) => entry.id === listId && !entry.archivedAt);
+  if (!list) return null;
+
+  const remaining = state.lists.filter(
+    (entry) => !entry.archivedAt && entry.id !== list.id
+  );
+  if (!remaining.length) return null;
+
+  const timestamp = nowIso();
+  list.archivedAt = timestamp;
+  list.updatedAt = timestamp;
+  if (state.settings.activeListId === list.id) {
+    state.settings.activeListId = remaining[0].id;
+  }
+
+  commit();
+  return list;
+}
+
+export function restoreList(listId) {
+  const list = state.lists.find((entry) => entry.id === listId && entry.archivedAt);
+  if (!list) return null;
+
+  list.archivedAt = null;
+  list.updatedAt = nowIso();
+  state.settings.activeListId = list.id;
+  commit();
+  return list;
 }
 
 /** Forces a write (used on pagehide / visibilitychange). */
@@ -615,6 +695,16 @@ function touchList(list) {
 function touchListById(listId) {
   const list = state.lists.find((entry) => entry.id === listId);
   if (list) touchList(list);
+}
+
+function uniqueListName(base) {
+  const names = new Set(state.lists.map((list) => list.name.toLowerCase()));
+  const clean = String(base || '').trim() || 'Groceries copy';
+  if (!names.has(clean.toLowerCase())) return clean;
+
+  let index = 2;
+  while (names.has(`${clean} ${index}`.toLowerCase())) index += 1;
+  return `${clean} ${index}`;
 }
 
 function findItem(listId, itemId) {

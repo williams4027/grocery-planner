@@ -12,7 +12,7 @@ be installed from Safari on an iPhone.
   (the `williams4027.github.io` URL redirects there).
 
 Status: **Phase 1 plus per-store lists, Google Calendar trip export, seeded recipes, backup and
-restore, and weekly meal planning.** Shopping polish and list management is next. See
+restore, weekly meal planning, and shopping/list-management polish.** Two-phone merge is next. See
 [PLAN.md](./PLAN.md) for the full roadmap.
 
 ## Quick start
@@ -114,8 +114,11 @@ PLAN.md                 product plan, data model, phase breakdown
 - Add items with an optional quantity and description (for example, “organic” or “green”). Tap the
   pencil on any row to edit its name, quantity, or description; delete with one tap.
 - Automatic aisle grouping (produce, dairy, pantry, …) with sticky headers.
-- Check items off; picked items sink within their aisle and the counter updates.
-- Rename the active list inline.
+- Check items off; picked items dim, sink within their aisle, and both the list counter and each
+  aisle’s progress update. Delete an item with one tap and use **Undo** in the toast if needed.
+- Rename the active list inline. Open **Manage lists** to duplicate a list (including its checked
+  items), archive a list without deleting anything, or restore an archived list later. The last
+  visible list cannot be archived.
 - **Add trip to Google Calendar** opens a prefilled event with the list in the description. It is a
   link, not an account connection: you pick the title/date/time, then review and save it in Google
   Calendar.

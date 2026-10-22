@@ -10,8 +10,8 @@ exporting/importing a JSON file. Hosted free on GitHub Pages.
 - **Sync:** manual export/import only (no server, no accounts, no network calls)
 
 **Status:** Phases 0–1 implemented, plus per-store lists, Google Calendar trip export, seeded
-recipes, item/recipe editing, JSON backup/restore, and weekly meal planning. Shopping polish and
-list management is next.
+recipes, item/recipe editing, JSON backup/restore, weekly meal planning, and shopping/list-
+management polish. Two-phone merge is next.
 
 ---
 
@@ -61,8 +61,8 @@ list management is next.
    aisle headers, running "x of y picked" counter. Store chips switch between Kroger, Whole Foods,
    Costco, and custom lists.
 3. `#/recipes` — recipe list, search/filter, detail, add-to-list, and create form.
-4. `#/lists` — all lists, create/rename/archive/duplicate.
-5. `#/settings` — aisle order, backup/restore, install help, data reset, app version.
+4. `#/list` → **Manage lists** sheet — create, duplicate, archive, and restore lists.
+5. `#/more` — build info, backup/restore, install help, roadmap, data counts.
 
 Bottom tab bar for Plan / List / Recipes / More.
 
@@ -83,7 +83,7 @@ Bottom tab bar for Plan / List / Recipes / More.
   "format": "grocery-planner-backup",
   "formatVersion": 1,
   "schemaVersion": 1,
-  "appVersion": "0.7.0",
+  "appVersion": "0.8.0",
   "exportedAt": "2026-10-22T15:00:00.000Z",
   "state": {
     "recipes": [{
@@ -171,9 +171,8 @@ Everything else (Node 14, npm, Safari) is fine for this stack, since there is no
 │   ├── seed-recipes.js     # recipes imported from the meal-planning sheet
 │   ├── sheet.js            # shared bottom-sheet dialog controller
 │   ├── pwa.js              # service worker registration, update checks
-│   ├── io.js               # export, import, validation (Phase 2)
 │   ├── ui.js               # tiny DOM helpers, icons, toast
-│   └── views/              # plan.js, list.js, recipes.js, more.js, (lists.js Phase 2)
+│   └── views/              # plan.js, list.js, recipes.js, more.js
 ├── PLAN.md
 └── README.md
 ```
@@ -222,16 +221,17 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 - **Accept:** create three store lists, switch between them, reload, and open a prefilled trip event
   with the correct items and aisle order.
 
-### Phase 2 — Backup/restore (done, v0.6.0) + shopping polish (queued)
+### Phase 2 — Backup/restore + shopping polish (done, v0.8.0)
 - **Export/import v1:** download JSON, import with Replace only; validation + error messages.
 - Settings screen with data counts, export button, and last-backup timestamp.
-- Backup files include every list, item, recipe, and setting; restores show a summary and require
-  confirmation. Corrupt or newer-version files are rejected atomically.
+- Backup files include every list, item, recipe, planned meal, and setting; restores show a summary
+  and require confirmation. Corrupt or newer-version files are rejected atomically.
 - Shopping mode polish: 44px+ targets, checked items dim and sink, per-aisle progress, undo on
   delete, swipe-free (buttons only).
-- Multiple lists: duplicate, archive, and restore; list management beyond the store switcher.
+- Multiple lists: duplicate (including checked items), archive without deleting data, and restore
+  from the **Manage lists** sheet. The last visible list cannot be archived.
 - **Accept:** export on phone A → import on phone B → identical list. Import of a corrupt file
-  fails safely without touching existing data.
+  fails safely without touching existing data. Done.
 
 ### Phase 3 — Recipes (done, v0.5.1; reorder and scaling queued)
 - Recipe list with search and category filters; create/edit form with a simple ingredient textarea.

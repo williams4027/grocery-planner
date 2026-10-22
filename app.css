@@ -670,6 +670,9 @@ h2 {
   left: 50%;
   bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom) + 16px);
   z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   max-width: calc(100vw - 40px);
   padding: 10px 16px;
   border-radius: 999px;
@@ -679,6 +682,25 @@ h2 {
   font-weight: 550;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
   transform: translateX(-50%);
+}
+
+.toast__action {
+  min-height: 44px;
+  flex: none;
+  padding: 2px 0 2px 10px;
+  border: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.28);
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.toast__action:focus-visible {
+  outline-color: currentColor;
 }
 
 body.has-add-dock .main {
@@ -693,6 +715,10 @@ body.has-add-dock .toast {
   .toast {
     background: #eef2ec;
     color: #101713;
+  }
+
+  .toast__action {
+    border-left-color: rgba(16, 23, 19, 0.2);
   }
 }
 
@@ -901,6 +927,10 @@ body.has-add-dock .toast {
   position: sticky;
   top: var(--topbar-offset);
   z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin: 0;
   padding: 12px 0 6px;
   background: var(--surface);
@@ -909,6 +939,29 @@ body.has-add-dock .toast {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.aisle__name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.aisle__progress {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.aisle__progress.is-complete {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .item-list {
@@ -1215,8 +1268,8 @@ body.sheet-open {
 .sheet__close {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   flex: none;
   border: 0;
   border-radius: 999px;
@@ -1282,8 +1335,8 @@ body.sheet-open {
 .icon-btn {
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   flex: none;
   padding: 0;
   border: 1px solid var(--line);
@@ -1341,7 +1394,7 @@ body.sheet-open {
   display: inline-flex;
   align-items: center;
   max-width: 190px;
-  min-height: 36px;
+  min-height: 44px;
   flex: none;
   padding: 6px 14px;
   overflow: hidden;
@@ -1378,12 +1431,18 @@ body.sheet-open {
 }
 
 .list-chip--new {
-  width: 40px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   justify-content: center;
   border-style: dashed;
   background: transparent;
   color: var(--accent);
+}
+
+.list-chip--manage {
+  border-style: solid;
+  color: var(--muted);
 }
 
 .list-chip--new svg {
@@ -1418,7 +1477,7 @@ body.sheet-open {
 .preset-chip {
   display: inline-flex;
   align-items: center;
-  min-height: 40px;
+  min-height: 44px;
   padding: 8px 14px;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -1461,6 +1520,93 @@ body.sheet-open {
   width: 100%;
   min-height: 48px;
   margin-top: 1px;
+}
+
+.manage-lists-intro {
+  margin: 0 0 12px;
+}
+
+.manage-section-title {
+  margin: 4px 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.manage-section-title--spaced {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.manage-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.manage-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.manage-row:last-child {
+  border-bottom: 0;
+}
+
+.manage-row__text {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.manage-row__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.manage-row__meta {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.manage-row__actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+.manage-row--archived .manage-row__name {
+  color: var(--muted);
+}
+
+.manage-btn {
+  min-height: 44px;
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+.manage-empty {
+  margin: 8px 0 0;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
 }
 
 .calendar-form__row {

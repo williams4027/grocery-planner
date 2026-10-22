@@ -153,8 +153,8 @@ export function mount(root) {
           <li class="is-done"><span class="roadmap__dot"></span>Recipes, editing, and seeded meals</li>
           <li class="is-done"><span class="roadmap__dot"></span>Backup and restore</li>
           <li class="is-done"><span class="roadmap__dot"></span>Meal plan with automatic list additions</li>
-          <li class="is-current"><span class="roadmap__dot"></span>Shopping polish and list management</li>
-          <li><span class="roadmap__dot"></span>Phase 5 — merge between two phones</li>
+          <li class="is-done"><span class="roadmap__dot"></span>Shopping polish and list management</li>
+          <li class="is-current"><span class="roadmap__dot"></span>Phase 5 — merge between two phones</li>
         </ul>
       </section>
 

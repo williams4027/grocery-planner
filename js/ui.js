@@ -44,6 +44,12 @@ export const ICONS = {
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="m9 5 7 7-7 7" />
     </svg>`,
+  ellipsis: `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none" />
+    </svg>`,
 };
 
 /** Creates an element. Children may be nodes, strings, arrays, or null. */
@@ -93,15 +99,51 @@ export function formatQuantity(item) {
 
 let toastTimer = null;
 
-export function showToast(message, duration = 2400) {
+function hideToast() {
   const toast = document.getElementById('toast');
   if (!toast) return;
 
-  toast.textContent = message;
-  toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = null;
+  toast.hidden = true;
+  toast.replaceChildren();
+}
+
+/**
+ * Shows a transient message. An optional action (for example Undo) keeps the
+ * toast visible longer and invokes onAction when tapped.
+ */
+export function showToast(message, options = 2400) {
+  const toast = document.getElementById('toast');
+  if (!toast) return;
+
+  const config =
+    typeof options === 'number' ? { duration: options } : { duration: 2400, ...options };
+  const hasAction =
+    typeof config.actionLabel === 'string' &&
+    config.actionLabel &&
+    typeof config.onAction === 'function';
 
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    toast.hidden = true;
-  }, duration);
+  toastTimer = null;
+  toast.replaceChildren(document.createTextNode(String(message)));
+
+  if (hasAction) {
+    const action = document.createElement('button');
+    action.className = 'toast__action';
+    action.type = 'button';
+    action.textContent = config.actionLabel;
+    action.addEventListener(
+      'click',
+      () => {
+        hideToast();
+        config.onAction();
+      },
+      { once: true }
+    );
+    toast.append(action);
+  }
+
+  toast.hidden = false;
+  toastTimer = setTimeout(hideToast, hasAction ? Math.max(config.duration, 5000) : config.duration);
 }

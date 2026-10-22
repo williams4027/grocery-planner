@@ -58,6 +58,17 @@ export function mount(root) {
       >
         ${ICONS.plus}
       </button>
+      <button
+        class="list-chip list-chip--new list-chip--manage"
+        id="manage-lists-chip"
+        type="button"
+        aria-label="Manage lists"
+        title="Manage lists"
+        aria-haspopup="dialog"
+        aria-controls="manage-lists-dialog"
+      >
+        ${ICONS.ellipsis}
+      </button>
     </div>
 
     <div id="storage-warning" class="banner" role="status" hidden></div>
@@ -175,6 +186,26 @@ export function mount(root) {
       <p id="new-list-status" class="sheet__status" role="status" aria-live="polite"></p>
     </dialog>
 
+    <dialog
+      id="manage-lists-dialog"
+      class="sheet manage-lists-sheet"
+      aria-labelledby="manage-lists-title"
+    >
+      <div class="sheet__handle" aria-hidden="true"></div>
+      <div class="sheet__head">
+        <h2 id="manage-lists-title">Manage lists</h2>
+        <button class="sheet__close" id="manage-lists-close" type="button" aria-label="Close">
+          ${ICONS.close}
+        </button>
+      </div>
+      <p class="card__note manage-lists-intro">
+        Duplicate a list for another trip, archive lists you are done with, or restore an archived
+        list. Archiving keeps every item.
+      </p>
+      <div id="manage-lists-body"></div>
+      <p id="manage-lists-status" class="sheet__status" role="status" aria-live="polite"></p>
+    </dialog>
+
     <dialog id="calendar-dialog" class="sheet" aria-labelledby="calendar-title">
       <div class="sheet__handle" aria-hidden="true"></div>
       <div class="sheet__head">
@@ -245,6 +276,11 @@ export function mount(root) {
     newListName: root.querySelector('#new-list-name'),
     presetChips: root.querySelector('#preset-chips'),
     newListStatus: root.querySelector('#new-list-status'),
+    manageChip: root.querySelector('#manage-lists-chip'),
+    manageDialog: root.querySelector('#manage-lists-dialog'),
+    manageClose: root.querySelector('#manage-lists-close'),
+    manageBody: root.querySelector('#manage-lists-body'),
+    manageStatus: root.querySelector('#manage-lists-status'),
     calendarDialog: root.querySelector('#calendar-dialog'),
     calendarClose: root.querySelector('#calendar-close'),
     calendarForm: root.querySelector('#calendar-form'),
@@ -278,6 +314,7 @@ export function mount(root) {
     renderName(list);
     renderCount(list);
     renderItems(list);
+    if (refs.manageDialog.open) renderManageLists();
   }
 
   function renderWarning() {
@@ -472,12 +509,145 @@ export function mount(root) {
   }
 
   function aisleSection(aisle, items) {
+    const picked = items.filter((item) => item.checked).length;
+    const complete = picked === items.length;
+
     return h(
       'section',
       { class: 'aisle', dataset: { aisle } },
-      h('h3', { class: 'aisle__title' }, aisle),
+      h(
+        'h3',
+        {
+          class: 'aisle__title',
+          'aria-label': `${aisle}, ${picked} of ${items.length} picked`,
+        },
+        h('span', { class: 'aisle__name' }, aisle),
+        h(
+          'span',
+          {
+            class: `aisle__progress${complete ? ' is-complete' : ''}`,
+            'aria-hidden': 'true',
+          },
+          `${picked}/${items.length}`
+        )
+      ),
       h('ul', { class: 'item-list' }, items.map(itemNode))
     );
+  }
+
+  function renderManageLists() {
+    const lists = store.visibleLists();
+    const archived = store.getState().lists.filter((list) => list.archivedAt);
+    const active = currentList();
+    const nodes = [h('h3', { class: 'manage-section-title' }, 'Your lists')];
+
+    if (lists.length) {
+      nodes.push(
+        h(
+          'ul',
+          { class: 'manage-list' },
+          lists.map((list) => {
+            const items = store.visibleItems(list);
+            const picked = items.filter((item) => item.checked).length;
+            const canArchive = lists.length > 1;
+            const isActive = active && active.id === list.id;
+
+            return h(
+              'li',
+              { class: 'manage-row', dataset: { listId: list.id } },
+              h(
+                'div',
+                { class: 'manage-row__text' },
+                h(
+                  'p',
+                  { class: 'manage-row__name' },
+                  list.name,
+                  isActive ? h('span', { class: 'badge' }, 'Active') : null
+                ),
+                h(
+                  'p',
+                  { class: 'manage-row__meta' },
+                  items.length
+                    ? `${items.length} item${items.length === 1 ? '' : 's'} · ${picked} picked`
+                    : 'Empty list'
+                )
+              ),
+              h(
+                'div',
+                { class: 'manage-row__actions' },
+                h(
+                  'button',
+                  {
+                    class: 'btn manage-btn',
+                    type: 'button',
+                    dataset: { action: 'duplicate', listId: list.id },
+                  },
+                  'Duplicate'
+                ),
+                h(
+                  'button',
+                  {
+                    class: 'btn manage-btn',
+                    type: 'button',
+                    dataset: { action: 'archive', listId: list.id },
+                    disabled: !canArchive,
+                    title: canArchive ? null : 'Create another list before archiving this one.',
+                  },
+                  'Archive'
+                )
+              )
+            );
+          })
+        )
+      );
+    }
+
+    nodes.push(
+      h(
+        'h3',
+        { class: 'manage-section-title manage-section-title--spaced' },
+        `Archived${archived.length ? ` (${archived.length})` : ''}`
+      )
+    );
+
+    if (archived.length) {
+      nodes.push(
+        h(
+          'ul',
+          { class: 'manage-list' },
+          archived.map((list) => {
+            const items = store.visibleItems(list);
+            return h(
+              'li',
+              { class: 'manage-row manage-row--archived', dataset: { listId: list.id } },
+              h(
+                'div',
+                { class: 'manage-row__text' },
+                h('p', { class: 'manage-row__name' }, list.name),
+                h(
+                  'p',
+                  { class: 'manage-row__meta' },
+                  `${items.length} item${items.length === 1 ? '' : 's'} · archived`
+                )
+              ),
+              h(
+                'button',
+                {
+                  class: 'btn manage-btn',
+                  type: 'button',
+                  dataset: { action: 'restore', listId: list.id },
+                },
+                'Restore'
+              )
+            );
+          })
+        )
+      );
+    } else {
+      nodes.push(h('p', { class: 'manage-empty' }, 'No archived lists.'));
+    }
+
+    refs.manageBody.replaceChildren(...nodes);
   }
 
   function itemNode(item) {
@@ -591,6 +761,15 @@ export function mount(root) {
     onOpen: prepareNewListSheet,
     onClose: () => {
       refs.newListStatus.textContent = '';
+    },
+  });
+
+  const manageListsSheet = createSheetController(refs.manageDialog, {
+    trigger: () => refs.manageChip,
+    initialFocus: () => refs.manageBody.querySelector('button') || refs.manageClose,
+    onOpen: renderManageLists,
+    onClose: () => {
+      refs.manageStatus.textContent = '';
     },
   });
 
@@ -751,6 +930,49 @@ export function mount(root) {
     showToast(`${list.name} list created.`);
   });
 
+  /* ---------- Manage lists ---------- */
+
+  refs.manageChip.addEventListener('click', () => manageListsSheet.open());
+  refs.manageClose.addEventListener('click', () => manageListsSheet.close());
+
+  refs.manageBody.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-action]');
+    if (!button) return;
+
+    const listId = button.dataset.listId;
+    refs.manageStatus.textContent = '';
+
+    if (button.dataset.action === 'duplicate') {
+      const copy = store.duplicateList(listId);
+      if (!copy) {
+        refs.manageStatus.textContent = 'Could not duplicate that list.';
+        return;
+      }
+      showToast(`${copy.name} created.`);
+      return;
+    }
+
+    if (button.dataset.action === 'archive') {
+      const list = store.visibleLists().find((entry) => entry.id === listId);
+      const archived = store.archiveList(listId);
+      if (!archived) {
+        refs.manageStatus.textContent = 'Create another list before archiving this one.';
+        return;
+      }
+      showToast(`${archived.name} archived.${list ? ' Items are safe.' : ''}`);
+      return;
+    }
+
+    if (button.dataset.action === 'restore') {
+      const restored = store.restoreList(listId);
+      if (!restored) {
+        refs.manageStatus.textContent = 'Could not restore that list.';
+        return;
+      }
+      showToast(`${restored.name} restored.`);
+    }
+  });
+
   /* ---------- Calendar sheet ---------- */
 
   function todayInputValue() {
@@ -847,8 +1069,24 @@ export function mount(root) {
     }
 
     if (button.dataset.action === 'delete') {
-      store.deleteItem(list.id, button.dataset.id);
-      showToast('Item removed');
+      const item = store
+        .visibleItems(list)
+        .find((entry) => entry.id === button.dataset.id);
+      if (!item || !store.deleteItem(list.id, item.id)) return;
+
+      showToast(`Removed ${item.name}.`, {
+        duration: 6000,
+        actionLabel: 'Undo',
+        onAction: () => {
+          const restored = store.restoreItem(list.id, item.id);
+          if (!restored) {
+            showToast('Could not restore that item.');
+            return;
+          }
+          showToast('Item restored.');
+          refs.items.focus({ preventScroll: true });
+        },
+      });
       refs.items.focus({ preventScroll: true });
     }
   });
@@ -868,6 +1106,7 @@ export function mount(root) {
     unsubscribe();
     addSheet.destroy();
     newListSheet.destroy();
+    manageListsSheet.destroy();
     calendarSheet.destroy();
     document.body.classList.remove('has-add-dock');
   };
