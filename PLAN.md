@@ -83,7 +83,7 @@ Bottom tab bar for Plan / List / Recipes / More.
   "format": "grocery-planner-backup",
   "formatVersion": 1,
   "schemaVersion": 1,
-  "appVersion": "0.8.0",
+  "appVersion": "0.9.0",
   "exportedAt": "2026-10-22T15:00:00.000Z",
   "state": {
     "recipes": [{
@@ -232,6 +232,17 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
   from the **Manage lists** sheet. The last visible list cannot be archived.
 - **Accept:** export on phone A → import on phone B → identical list. Import of a corrupt file
   fails safely without touching existing data. Done.
+
+### Phase 2.5 — List refinement (done, v0.9.0)
+- Adding an item that matches an existing row on the target list combines quantities instead of
+  creating a duplicate. Matching ignores name/unit case and simple unit plurals.
+- The item edit sheet exposes **Move to**; saving with another list selected moves the row, merging
+  with a matching target row when possible. Manual/recipe additions and moves share the merge logic.
+- Seed recipe ingredients were normalized to one lowercase grocery vocabulary with canonical
+  alternatives and cleaned optional/prep wording. Untouched seed recipes are refreshed on upgrade;
+  edited and deleted recipes are left alone.
+- **Accept:** add “2 cups flour” twice and see one row with 4 cups; move it to another list; reload
+  and confirm both lists persist. Done.
 
 ### Phase 3 — Recipes (done, v0.5.1; reorder and scaling queued)
 - Recipe list with search and category filters; create/edit form with a simple ingredient textarea.

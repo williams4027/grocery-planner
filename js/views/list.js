@@ -143,7 +143,7 @@ export function mount(root) {
           </label>
         </div>
         <label class="field field--stacked" id="add-list-field" hidden>
-          <span class="field__label">Add to</span>
+          <span class="field__label" id="add-list-label">Add to</span>
           <select id="add-list" class="field__input" name="list"></select>
         </label>
       </form>
@@ -268,6 +268,7 @@ export function mount(root) {
     qtyInput: root.querySelector('#add-qty'),
     unitInput: root.querySelector('#add-unit'),
     listField: root.querySelector('#add-list-field'),
+    listLabel: root.querySelector('#add-list-label'),
     listSelect: root.querySelector('#add-list'),
     status: root.querySelector('#sheet-status'),
     newListDialog: root.querySelector('#new-list-dialog'),
@@ -342,7 +343,21 @@ export function mount(root) {
     const hasPrevious = lists.some((entry) => entry.id === previous);
     refs.listSelect.value =
       (!forceActive && hasPrevious ? previous : activeId) || (lists[0] && lists[0].id) || '';
-    refs.listField.hidden = Boolean(editingItemId) || lists.length < 2;
+    refs.listLabel.textContent = editingItemId ? 'Move to' : 'Add to';
+    refs.listField.hidden = lists.length < 2;
+    updateSubmitLabel();
+  }
+
+  function updateSubmitLabel() {
+    if (!editingItemId) {
+      refs.submitButton.textContent = 'Add';
+      return;
+    }
+
+    const active = currentList();
+    const targetId = refs.listSelect.value;
+    refs.submitButton.textContent =
+      active && targetId && targetId !== active.id ? 'Save & move' : 'Save';
   }
 
   function renderChips() {
@@ -684,7 +699,8 @@ export function mount(root) {
             class: 'item__edit',
             type: 'button',
             dataset: { id: item.id, action: 'edit' },
-            'aria-label': `Edit ${item.name}`,
+            'aria-label': `Edit or move ${item.name}`,
+            title: 'Edit or move',
           },
           icon('pencil')
         ),
@@ -719,7 +735,7 @@ export function mount(root) {
         refs.nameInput.value = item.name;
         refs.qtyInput.value = item.qty == null ? '' : String(item.qty);
         refs.unitInput.value = item.unit || '';
-        refs.listField.hidden = true;
+        renderAddListOptions({ forceActive: true });
         return;
       }
 
@@ -790,6 +806,7 @@ export function mount(root) {
     addSheet.open();
   });
   refs.closeButton.addEventListener('click', () => addSheet.close());
+  refs.listSelect.addEventListener('change', updateSubmitLabel);
 
   refs.form.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -804,6 +821,11 @@ export function mount(root) {
     }
 
     if (editingItemId) {
+      const targetId = refs.listSelect.value;
+      const target =
+        store.visibleLists().find((entry) => entry.id === targetId && entry.id !== active.id) ||
+        null;
+
       const item = store.updateItem(active.id, editingItemId, {
         name,
         qty: refs.qtyInput.value,
@@ -812,6 +834,23 @@ export function mount(root) {
 
       if (!item) {
         refs.status.textContent = 'Could not save that item.';
+        return;
+      }
+
+      if (target) {
+        const moved = store.moveItem(active.id, item.id, target.id);
+        if (!moved) {
+          refs.status.textContent = 'Item saved, but it could not be moved.';
+          return;
+        }
+
+        addSheet.close();
+        showToast(
+          moved.merged
+            ? `Moved ${item.name} to ${target.name} and combined quantities.`
+            : `Moved ${item.name} to ${target.name}.`
+        );
+        refs.items.focus({ preventScroll: true });
         return;
       }
 

@@ -12,8 +12,8 @@ be installed from Safari on an iPhone.
   (the `williams4027.github.io` URL redirects there).
 
 Status: **Phase 1 plus per-store lists, Google Calendar trip export, seeded recipes, backup and
-restore, weekly meal planning, and shopping/list-management polish.** Two-phone merge is next. See
-[PLAN.md](./PLAN.md) for the full roadmap.
+restore, weekly meal planning, shopping/list-management polish, quantity merging, and cross-list
+moves.** Two-phone merge is next. See [PLAN.md](./PLAN.md) for the full roadmap.
 
 ## Quick start
 
@@ -111,8 +111,11 @@ PLAN.md                 product plan, data model, phase breakdown
 - Add items from the docked **Add item** button at the bottom of the list screen; the sheet stays
   open for batch entry. If you have more than one store list, choose **Add to** (Kroger, Costco, …)
   before submitting.
-- Add items with an optional quantity and description (for example, “organic” or “green”). Tap the
-  pencil on any row to edit its name, quantity, or description; delete with one tap.
+- Add items with an optional quantity and description (for example, “organic” or “green”). Adding
+  an item that already exists on the target list combines the quantities instead of creating a
+  duplicate; simple unit variants like “cup” and “cups” match. Tap the pencil on any row to edit its
+  name, quantity, or description, or choose another list under **Move to** and save; delete with one
+  tap.
 - Automatic aisle grouping (produce, dairy, pantry, …) with sticky headers.
 - Check items off; picked items dim, sink within their aisle, and both the list counter and each
   aisle’s progress update. Delete an item with one tap and use **Undo** in the toast if needed.
@@ -123,9 +126,11 @@ PLAN.md                 product plan, data model, phase breakdown
   link, not an account connection: you pick the title/date/time, then review and save it in Google
   Calendar.
 - Browse **recipes seeded from the meal-planning sheet**, search or filter by category, and add all
-  of a recipe’s ingredients to the active list or another store list in one tap. Save new recipes
-  or edit a recipe’s title, category, and ingredient lines, including quantities; ingredient lines
-  like “2 cups chopped carrots” are split into quantity, unit, and item name automatically.
+  of a recipe’s ingredients to the active list or another store list in one tap. Seed ingredients
+  use a shared lowercase vocabulary with one canonical choice for alternatives, so ingredients from
+  different recipes combine cleanly. Save new recipes or edit a recipe’s title, category, and
+  ingredient lines, including quantities; ingredient lines like “2 cups chopped carrots” are split
+  into quantity, unit, and item name automatically.
 - **Plan a week of meals** in a 7-day × 3-slot grid. Move between weeks, jump back to today, set
   servings, copy last week into empty slots, or clear a day. Choosing a recipe adds its ingredients
   to the selected list automatically, scaled to the planned servings. Updating or clearing a meal

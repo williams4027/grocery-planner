@@ -228,7 +228,7 @@ export function addRecipeToList(recipeId, listId) {
     });
 
     if (!item.name) continue;
-    list.items.push(item);
+    addOrMergeItem(list, item);
     count += 1;
   }
 
@@ -431,10 +431,10 @@ export function addItem(listId, input) {
   const item = createItem(input);
   if (!item.name) return null;
 
-  list.items.push(item);
+  const result = addOrMergeItem(list, item);
   touchList(list);
   commit();
-  return item;
+  return result.item;
 }
 
 export function updateItem(listId, itemId, input = {}) {
@@ -476,6 +476,51 @@ export function deleteItem(listId, itemId) {
   touchListById(listId);
   commit();
   return true;
+}
+
+/**
+ * Moves one item to another visible list. If the target already has the same
+ * item and unit, the quantities combine and the source row is tombstoned.
+ */
+export function moveItem(listId, itemId, targetListId) {
+  if (listId === targetListId) return null;
+
+  const source = state.lists.find((entry) => entry.id === listId);
+  const target = state.lists.find(
+    (entry) => entry.id === targetListId && !entry.archivedAt
+  );
+  const item = source
+    ? source.items.find((entry) => entry.id === itemId && !entry.deletedAt)
+    : null;
+  if (!source || !target || !item) return null;
+
+  const timestamp = nowIso();
+  const existing = findVisibleMatch(target, item);
+  let movedItem = item;
+  let merged = false;
+
+  if (existing) {
+    // Keep the row checked only when both copies were already picked up.
+    mergeItem(existing, item, {
+      checked: Boolean(existing.checked && item.checked),
+      timestamp,
+    });
+
+    item.deletedAt = timestamp;
+    item.updatedAt = timestamp;
+    movedItem = existing;
+    merged = true;
+  } else {
+    const index = source.items.indexOf(item);
+    if (index !== -1) source.items.splice(index, 1);
+    target.items.push(item);
+    item.updatedAt = timestamp;
+  }
+
+  touchList(source);
+  touchList(target);
+  commit();
+  return { item: movedItem, sourceList: source, targetList: target, merged };
 }
 
 export function restoreItem(listId, itemId) {
@@ -588,14 +633,32 @@ function ensureRecipeSeed() {
   const currentVersion = Number(state.settings.recipeSeedVersion) || 0;
   if (currentVersion >= RECIPE_SEED_VERSION) return;
 
-  const existingKeys = new Set(
-    state.recipes.map((recipe) => recipe.seedKey).filter(Boolean)
-  );
-
+  const seeds = new Map();
   for (const seed of SEED_RECIPES) {
-    if (!seed.seedKey || existingKeys.has(seed.seedKey)) continue;
-    state.recipes.push(createRecipe(seed));
-    existingKeys.add(seed.seedKey);
+    if (!seed.seedKey) continue;
+    seeds.set(seed.seedKey, createRecipe(seed));
+  }
+
+  const existingByKey = new Map();
+  for (const recipe of state.recipes) {
+    if (recipe.seedKey) existingByKey.set(recipe.seedKey, recipe);
+  }
+
+  for (const [seedKey, freshSeed] of seeds) {
+    const existing = existingByKey.get(seedKey);
+    if (!existing) {
+      state.recipes.push(freshSeed);
+      continue;
+    }
+
+    // Matching timestamps mean the seed recipe has never been edited. Refresh
+    // its vocabulary, but never overwrite a recipe the household changed.
+    if (!existing.deletedAt && existing.createdAt === existing.updatedAt) {
+      const timestamp = nowIso();
+      existing.ingredients = freshSeed.ingredients;
+      existing.createdAt = timestamp;
+      existing.updatedAt = timestamp;
+    }
   }
 
   state.settings.recipeSeedVersion = RECIPE_SEED_VERSION;
@@ -680,12 +743,142 @@ function scaleQuantity(qty, recipeServings, plannedServings) {
   return normalizeQty(qty * (to / from));
 }
 
+/* Unit matching ignores case and simple singular/plural differences, so "1 cup
+ * flour" and "2 cups flour" combine instead of producing two rows. */
+const COUNT_UNIT_FORMS = new Map([
+  ['cup', 'cups'],
+  ['clove', 'cloves'],
+  ['can', 'cans'],
+  ['carton', 'cartons'],
+  ['slice', 'slices'],
+  ['bunch', 'bunches'],
+  ['bag', 'bags'],
+  ['pack', 'packs'],
+  ['jar', 'jars'],
+  ['bottle', 'bottles'],
+  ['box', 'boxes'],
+  ['pinch', 'pinches'],
+  ['dash', 'dashes'],
+  ['stick', 'sticks'],
+  ['head', 'heads'],
+  ['sprig', 'sprigs'],
+  ['fillet', 'fillets'],
+  ['piece', 'pieces'],
+]);
+
+const MEASURE_UNIT_FORMS = new Map([
+  ['tbsp', 'tbsp'],
+  ['tablespoon', 'tbsp'],
+  ['tablespoons', 'tbsp'],
+  ['tsp', 'tsp'],
+  ['teaspoon', 'tsp'],
+  ['teaspoons', 'tsp'],
+  ['lb', 'lb'],
+  ['lbs', 'lb'],
+  ['pound', 'lb'],
+  ['pounds', 'lb'],
+  ['oz', 'oz'],
+  ['ounce', 'oz'],
+  ['ounces', 'oz'],
+  ['g', 'g'],
+  ['gram', 'g'],
+  ['grams', 'g'],
+  ['kg', 'kg'],
+  ['kilogram', 'kg'],
+  ['kilograms', 'kg'],
+  ['ml', 'ml'],
+  ['milliliter', 'ml'],
+  ['milliliters', 'ml'],
+  ['l', 'l'],
+  ['liter', 'l'],
+  ['liters', 'l'],
+]);
+
+const UNIT_ALIASES = new Map();
+for (const [singular, plural] of COUNT_UNIT_FORMS) {
+  UNIT_ALIASES.set(singular, singular);
+  UNIT_ALIASES.set(plural, singular);
+}
+for (const [alias, canonical] of MEASURE_UNIT_FORMS) {
+  UNIT_ALIASES.set(alias, canonical);
+}
+
+function unitMatchKey(unit) {
+  const clean = String(unit || '')
+    .trim()
+    .toLowerCase();
+  return UNIT_ALIASES.get(clean) || clean;
+}
+
+function displayUnitForQuantity(unit, qty) {
+  const clean = String(unit || '').trim();
+  if (!clean) return '';
+  if (qty === null || qty === undefined) return clean;
+
+  const key = unitMatchKey(clean);
+  if (MEASURE_UNIT_FORMS.has(key)) return key;
+
+  const plural = COUNT_UNIT_FORMS.get(key);
+  if (plural) return Number(qty) === 1 ? key : plural;
+
+  return clean;
+}
+
 function itemMatchKey(item) {
   return `${String((item && item.name) || '')
     .trim()
-    .toLowerCase()}|${String((item && item.unit) || '')
-    .trim()
-    .toLowerCase()}`;
+    .toLowerCase()}|${unitMatchKey(item && item.unit)}`;
+}
+
+function findVisibleMatch(list, item) {
+  if (!list || !item || !item.name) return null;
+  const key = itemMatchKey(item);
+
+  return (
+    list.items.find(
+      (entry) =>
+        !entry.deletedAt && entry.name && itemMatchKey(entry) === key
+    ) || null
+  );
+}
+
+/** Combines a duplicate row into an existing item and keeps its identity. */
+function mergeItem(existing, item, { checked = false, timestamp = nowIso() } = {}) {
+  const totalQty = (Number(existing.qty) || 0) + (Number(item.qty) || 0);
+  existing.qty = totalQty > 0 ? normalizeQty(totalQty) : null;
+  existing.unit = displayUnitForQuantity(existing.unit || item.unit, existing.qty);
+  existing.checked = Boolean(checked);
+  if (!existing.sourceRecipeId && item.sourceRecipeId) {
+    existing.sourceRecipeId = item.sourceRecipeId;
+  }
+  // A row that combines planned and manual additions no longer belongs solely
+  // to one meal entry, so leave it in place when that meal is cleared.
+  if (existing.sourcePlanEntryId && item.sourcePlanEntryId) {
+    if (existing.sourcePlanEntryId !== item.sourcePlanEntryId) {
+      existing.sourcePlanEntryId = null;
+    }
+  } else if (existing.sourcePlanEntryId || item.sourcePlanEntryId) {
+    existing.sourcePlanEntryId = null;
+  }
+  if (!existing.note && item.note) existing.note = item.note;
+  existing.updatedAt = timestamp;
+  return existing;
+}
+
+/**
+ * Adds an item to a list, or combines its quantity with an existing matching
+ * item. Adding to an already checked row unchecks it because the new quantity
+ * still needs to be bought.
+ */
+function addOrMergeItem(list, item) {
+  const existing = findVisibleMatch(list, item);
+  if (!existing) {
+    list.items.push(item);
+    return { item, merged: false };
+  }
+
+  mergeItem(existing, item, { checked: false });
+  return { item: existing, merged: true };
 }
 
 function touchList(list) {
