@@ -1,10 +1,11 @@
 /* Grocery list view — Phase 1 */
 
 import * as store from '../store.js';
-import { h, icon, showToast, formatQuantity } from '../ui.js';
+import { h, icon, ICONS, showToast, formatQuantity } from '../ui.js';
 
 export function mount(root) {
   let renaming = false;
+  const viewport = window.visualViewport;
 
   root.innerHTML = `
     <header class="page-head">
@@ -18,6 +19,29 @@ export function mount(root) {
     <div id="storage-warning" class="banner" role="status" hidden></div>
 
     <section class="card list-card" aria-label="Grocery list">
+      <div id="items" class="items" tabindex="-1" aria-label="List items"></div>
+    </section>
+
+    <button
+      class="fab"
+      id="add-fab"
+      type="button"
+      aria-haspopup="dialog"
+      aria-controls="add-dialog"
+    >
+      <span class="fab__icon" aria-hidden="true">${ICONS.plus}</span>
+      <span>Add item</span>
+    </button>
+
+    <dialog id="add-dialog" class="sheet" aria-labelledby="sheet-title">
+      <div class="sheet__handle" aria-hidden="true"></div>
+      <div class="sheet__head">
+        <h2 id="sheet-title">Add item</h2>
+        <button class="sheet__close" id="sheet-close" type="button" aria-label="Close">
+          ${ICONS.close}
+        </button>
+      </div>
+
       <form id="add-form" class="add" autocomplete="off">
         <div class="add__main">
           <label class="sr-only" for="add-name">Item name</label>
@@ -30,6 +54,7 @@ export function mount(root) {
             enterkeyhint="done"
             autocapitalize="sentences"
             maxlength="120"
+            autofocus
             required
           />
           <button class="btn btn--primary add__submit" type="submit">Add</button>
@@ -61,8 +86,9 @@ export function mount(root) {
           </label>
         </div>
       </form>
-      <div id="items" class="items" tabindex="-1" aria-label="List items"></div>
-    </section>
+
+      <p id="sheet-status" class="sheet__status" role="status" aria-live="polite"></p>
+    </dialog>
   `;
 
   const refs = {
@@ -70,11 +96,15 @@ export function mount(root) {
     renameButton: root.querySelector('#rename-btn'),
     count: root.querySelector('#list-count'),
     warning: root.querySelector('#storage-warning'),
+    items: root.querySelector('#items'),
+    fab: root.querySelector('#add-fab'),
+    dialog: root.querySelector('#add-dialog'),
+    closeButton: root.querySelector('#sheet-close'),
     form: root.querySelector('#add-form'),
     nameInput: root.querySelector('#add-name'),
     qtyInput: root.querySelector('#add-qty'),
     unitInput: root.querySelector('#add-unit'),
-    items: root.querySelector('#items'),
+    status: root.querySelector('#sheet-status'),
   };
 
   function currentList() {
@@ -184,7 +214,7 @@ export function mount(root) {
           { class: 'empty empty--inline' },
           h('div', { class: 'empty__icon' }, icon('list')),
           h('h2', {}, 'Your list is empty'),
-          h('p', {}, 'Add the first item above — it stays on this device.')
+          h('p', {}, 'Tap Add item to start your list. It stays on this device.')
         )
       );
       return;
@@ -267,13 +297,69 @@ export function mount(root) {
     );
   }
 
-  refs.renameButton.addEventListener('click', () => {
-    const list = currentList();
-    if (!list || renaming) return;
+  /* ---------- Add sheet ---------- */
 
-    renaming = true;
-    renderName(list);
+  let sheetFinalized = true;
+
+  function syncViewportGap() {
+    if (!viewport || !refs.dialog.open) return;
+
+    const gap = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+    refs.dialog.style.setProperty('--keyboard-gap', `${Math.round(gap)}px`);
+  }
+
+  function finalizeClose() {
+    if (sheetFinalized) return;
+
+    sheetFinalized = true;
+    document.body.classList.remove('sheet-open');
+    refs.dialog.style.removeProperty('--keyboard-gap');
+    refs.status.textContent = '';
+    refs.fab.focus({ preventScroll: true });
+  }
+
+  function openSheet() {
+    if (refs.dialog.open) return;
+
+    refs.dialog.showModal();
+    sheetFinalized = false;
+    document.body.classList.add('sheet-open');
+    syncViewportGap();
+
+    requestAnimationFrame(() => {
+      refs.nameInput.focus({ preventScroll: true });
+      refs.nameInput.select();
+    });
+  }
+
+  function closeSheet() {
+    if (refs.dialog.open) refs.dialog.close();
+    finalizeClose();
+  }
+
+  refs.fab.addEventListener('click', openSheet);
+  refs.closeButton.addEventListener('click', closeSheet);
+
+  refs.dialog.addEventListener('click', (event) => {
+    const rect = refs.dialog.getBoundingClientRect();
+    const outside =
+      event.clientX < rect.left ||
+      event.clientX > rect.right ||
+      event.clientY < rect.top ||
+      event.clientY > rect.bottom;
+
+    if (outside) closeSheet();
   });
+
+  refs.dialog.addEventListener('close', finalizeClose);
+  refs.dialog.addEventListener('cancel', () => {
+    setTimeout(finalizeClose, 0);
+  });
+
+  if (viewport) {
+    viewport.addEventListener('resize', syncViewportGap);
+    viewport.addEventListener('scroll', syncViewportGap);
+  }
 
   refs.form.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -293,10 +379,9 @@ export function mount(root) {
       unit: refs.unitInput.value,
     });
 
-    refs.nameInput.value = '';
-    refs.qtyInput.value = '';
-    refs.unitInput.value = '';
-    refs.nameInput.focus();
+    refs.form.reset();
+    refs.status.textContent = `Added ${name}.`;
+    refs.nameInput.focus({ preventScroll: true });
   });
 
   refs.items.addEventListener('change', (event) => {
@@ -321,10 +406,28 @@ export function mount(root) {
     refs.items.focus({ preventScroll: true });
   });
 
+  refs.renameButton.addEventListener('click', () => {
+    const list = currentList();
+    if (!list || renaming) return;
+
+    renaming = true;
+    renderName(list);
+  });
+
   const unsubscribe = store.subscribe(render);
   render();
 
-  return unsubscribe;
+  return () => {
+    unsubscribe();
+
+    if (refs.dialog.open) refs.dialog.close();
+    finalizeClose();
+
+    if (viewport) {
+      viewport.removeEventListener('resize', syncViewportGap);
+      viewport.removeEventListener('scroll', syncViewportGap);
+    }
+  };
 }
 
 function compareItems(a, b) {

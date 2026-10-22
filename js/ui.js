@@ -22,6 +22,14 @@ export const ICONS = {
       <path d="M5 4.5h9.5A2.5 2.5 0 0 1 17 7v12.5H7.5A2.5 2.5 0 0 1 5 17V4.5Z" />
       <path d="M8.5 8.5h5M8.5 12h5M8.5 15.5h3" />
     </svg>`,
+  plus: `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M12 5v14M5 12h14" />
+    </svg>`,
+  close: `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="m6 6 12 12M18 6 6 18" />
+    </svg>`,
 };
 
 /** Creates an element. Children may be nodes, strings, arrays, or null. */

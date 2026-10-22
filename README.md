@@ -99,6 +99,8 @@ PLAN.md                 product plan, data model, phase breakdown
 
 ## What works today
 
+- Add items from a floating **Add item** button anywhere in the list; the sheet stays open for
+  batch entry.
 - Add items with an optional quantity and unit; delete with one tap.
 - Automatic aisle grouping (produce, dairy, pantry, …) with sticky headers.
 - Check items off; picked items sink within their aisle and the counter updates.
