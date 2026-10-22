@@ -341,6 +341,7 @@ function defaultSettings() {
     lastExportAt: null,
     backupNudgeDays: 14,
     recipeSeedVersion: 0,
+    itemMergeVersion: 0,
   };
 }
 
@@ -366,6 +367,10 @@ function normalizeSettings(input) {
     recipeSeedVersion:
       Number.isFinite(settings.recipeSeedVersion) && settings.recipeSeedVersion >= 0
         ? settings.recipeSeedVersion
+        : 0,
+    itemMergeVersion:
+      Number.isFinite(settings.itemMergeVersion) && settings.itemMergeVersion >= 0
+        ? settings.itemMergeVersion
         : 0,
   };
 }

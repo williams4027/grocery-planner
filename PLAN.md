@@ -83,7 +83,7 @@ Bottom tab bar for Plan / List / Recipes / More.
   "format": "grocery-planner-backup",
   "formatVersion": 1,
   "schemaVersion": 1,
-  "appVersion": "0.9.0",
+  "appVersion": "0.9.1",
   "exportedAt": "2026-10-22T15:00:00.000Z",
   "state": {
     "recipes": [{
@@ -233,9 +233,11 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 - **Accept:** export on phone A → import on phone B → identical list. Import of a corrupt file
   fails safely without touching existing data. Done.
 
-### Phase 2.5 — List refinement (done, v0.9.0)
+### Phase 2.5 — List refinement (done, v0.9.1)
 - Adding an item that matches an existing row on the target list combines quantities instead of
-  creating a duplicate. Matching ignores name/unit case and simple unit plurals.
+  creating a duplicate. Matching ignores name/unit case, simple unit plurals, and common ingredient
+  name plurals such as egg/eggs. A one-time upgrade cleanup merges duplicate rows saved by older
+  versions while keeping separate planned meals distinct.
 - The item edit sheet exposes **Move to**; saving with another list selected moves the row, merging
   with a matching target row when possible. Manual/recipe additions and moves share the merge logic.
 - Seed recipe ingredients were normalized to one lowercase grocery vocabulary with canonical

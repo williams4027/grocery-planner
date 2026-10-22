@@ -113,9 +113,10 @@ PLAN.md                 product plan, data model, phase breakdown
   before submitting.
 - Add items with an optional quantity and description (for example, “organic” or “green”). Adding
   an item that already exists on the target list combines the quantities instead of creating a
-  duplicate; simple unit variants like “cup” and “cups” match. Tap the pencil on any row to edit its
-  name, quantity, or description, or choose another list under **Move to** and save; delete with one
-  tap.
+  duplicate; simple unit variants like “cup” and “cups” and common name plurals like “egg” and
+  “eggs” match. Existing duplicate rows from earlier versions are merged once on upgrade. Tap the
+  pencil on any row to edit its name, quantity, or description, or choose another list under
+  **Move to** and save; delete with one tap.
 - Automatic aisle grouping (produce, dairy, pantry, …) with sticky headers.
 - Check items off; picked items dim, sink within their aisle, and both the list counter and each
   aisle’s progress update. Delete an item with one tap and use **Undo** in the toast if needed.

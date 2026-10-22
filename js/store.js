@@ -32,6 +32,7 @@ const listeners = new Set();
 const RECIPE_CATEGORY_ORDER = new Map(
   RECIPE_CATEGORIES.map((category, index) => [category, index])
 );
+const ITEM_MERGE_VERSION = 1;
 let saveTimer = null;
 let saveChain = Promise.resolve();
 
@@ -95,6 +96,7 @@ export async function init() {
   }
 
   ensureRecipeSeed();
+  ensureListDedupe();
   ready = true;
   notify();
   scheduleSave();
@@ -409,6 +411,7 @@ export function importBackup(input) {
 
   state = parsed.state;
   if (parsed.exportedAt) state.settings.lastExportAt = parsed.exportedAt;
+  ensureListDedupe();
   loadError = '';
   if (storageMode !== 'memory') saveError = '';
   commit();
@@ -665,6 +668,54 @@ function ensureRecipeSeed() {
   state.updatedAt = nowIso();
 }
 
+/**
+ * One-time cleanup for lists saved before plural-aware matching. It keeps
+ * distinct planned meals separate so clearing one plan entry stays exact.
+ */
+function ensureListDedupe() {
+  const currentVersion = Number(state.settings.itemMergeVersion) || 0;
+  if (currentVersion >= ITEM_MERGE_VERSION) return;
+
+  const timestamp = nowIso();
+
+  for (const list of state.lists) {
+    const seen = new Map();
+    let changed = false;
+
+    for (const item of list.items) {
+      if (item.deletedAt || !item.name) continue;
+
+      const key = itemMatchKey(item);
+      const existing = seen.get(key);
+      if (!existing) {
+        seen.set(key, item);
+        continue;
+      }
+
+      if (
+        existing.sourcePlanEntryId &&
+        item.sourcePlanEntryId &&
+        existing.sourcePlanEntryId !== item.sourcePlanEntryId
+      ) {
+        continue;
+      }
+
+      mergeItem(existing, item, {
+        checked: Boolean(existing.checked && item.checked),
+        timestamp,
+      });
+      item.deletedAt = timestamp;
+      item.updatedAt = timestamp;
+      changed = true;
+    }
+
+    if (changed) touchList(list);
+  }
+
+  state.settings.itemMergeVersion = ITEM_MERGE_VERSION;
+  state.updatedAt = nowIso();
+}
+
 function notify() {
   for (const listener of listeners) {
     try {
@@ -824,10 +875,52 @@ function displayUnitForQuantity(unit, qty) {
   return clean;
 }
 
-function itemMatchKey(item) {
-  return `${String((item && item.name) || '')
+/* A few common grocery plurals do not follow the usual rules. The rest of the
+ * singularizer is intentionally conservative so words like asparagus, hummus,
+ * and glass are left alone. */
+const NAME_PLURAL_EXCEPTIONS = new Map([
+  ['cookies', 'cookie'],
+  ['brownies', 'brownie'],
+  ['smoothies', 'smoothie'],
+  ['pies', 'pie'],
+  ['veggies', 'veggie'],
+  ['fries', 'fry'],
+  ['quiches', 'quiche'],
+  ['chilies', 'chile'],
+  ['chilis', 'chile'],
+  ['glasses', 'glass'],
+  ['loaves', 'loaf'],
+  ['knives', 'knife'],
+  ['leaves', 'leaf'],
+  ['halves', 'half'],
+]);
+
+function singularNameWord(word) {
+  if (word.length < 3) return word;
+
+  const exception = NAME_PLURAL_EXCEPTIONS.get(word);
+  if (exception) return exception;
+
+  if (/(ss|us|is)$/.test(word)) return word;
+  if (word.endsWith('ies')) return `${word.slice(0, -3)}y`;
+  if (word.endsWith('oes')) return word.slice(0, -2);
+  if (/(ches|shes|xes|zes)$/.test(word)) return word.slice(0, -2);
+  if (word.endsWith('s')) return word.slice(0, -1);
+  return word;
+}
+
+function itemNameKey(name) {
+  return String(name || '')
     .trim()
-    .toLowerCase()}|${unitMatchKey(item && item.unit)}`;
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .split(' ')
+    .map(singularNameWord)
+    .join(' ');
+}
+
+function itemMatchKey(item) {
+  return `${itemNameKey(item && item.name)}|${unitMatchKey(item && item.unit)}`;
 }
 
 function findVisibleMatch(list, item) {
