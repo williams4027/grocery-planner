@@ -12,8 +12,9 @@ backing up to a shared Google Drive folder. Hosted free on GitHub Pages.
 **Status:** Phases 0–6 implemented, plus per-store lists, Google Calendar trip export, recipe
 ordering/duplication, weekly meal planning, `.ics` calendar export, JSON backup/restore, bulk list
 actions, alphabetical aisle sorting, a Google Drive backup search shortcut, factory reset to
-seeded data, and shopping/list-management polish. Multi-device sharing is a manual backup/restore
-handoff through a shared Google Drive folder. There is no automatic merge or live sync.
+seeded data, a double-tap zoom guard, and shopping/list-management polish. Multi-device sharing is
+a manual backup/restore handoff through a shared Google Drive folder. There is no automatic merge
+or live sync.
 
 ---
 
@@ -93,7 +94,7 @@ Bottom tab bar for Plan / List / Recipes / More.
   "format": "grocery-planner-backup",
   "formatVersion": 1,
   "schemaVersion": 1,
-  "appVersion": "0.9.7",
+  "appVersion": "0.9.8",
   "exportedAt": "2026-10-22T15:00:00.000Z",
   "state": {
     "recipes": [{
@@ -353,6 +354,14 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 - Existing backup export remains the way to preserve data before resetting.
 - **Accept:** make edits, reset, and see exactly one Groceries list, zero items, zero planned meals,
   and the seeded recipes; reload and confirm the reset persisted. Done.
+
+### Phase 5.3 — Double-tap zoom guard (done, v0.9.8)
+- The root document uses `touch-action: manipulation`, so a quick double tap does not zoom the app
+  while single taps and fast repeated taps on controls behave normally.
+- Pinch-to-zoom remains available for accessibility; the viewport does not set `user-scalable=no`
+  or `maximum-scale=1`.
+- **Accept:** double-tap the page on a phone and the zoom level stays at 100%; pinch still zooms.
+  Done.
 
 ### Phase 6 — Polish pass (done, v0.9.3)
 - Install help page per platform (iOS Share → Add to Home Screen; Android/desktop install button).

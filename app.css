@@ -49,6 +49,8 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  /* Keep pinch zoom available, but reserve double-tap for app controls. */
+  touch-action: manipulation;
 }
 
 body {
@@ -62,6 +64,7 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   overscroll-behavior-y: none;
+  touch-action: manipulation;
 }
 
 button,
