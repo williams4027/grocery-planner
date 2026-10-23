@@ -370,6 +370,7 @@ function defaultSettings() {
     theme: 'system',
     lastExportAt: null,
     backupNudgeDays: 14,
+    keepAwake: false,
     recipeSeedVersion: 0,
     itemMergeVersion: 0,
   };
@@ -394,6 +395,7 @@ function normalizeSettings(input) {
       Number.isFinite(settings.backupNudgeDays) && settings.backupNudgeDays > 0
         ? settings.backupNudgeDays
         : 14,
+    keepAwake: settings.keepAwake === true,
     recipeSeedVersion:
       Number.isFinite(settings.recipeSeedVersion) && settings.recipeSeedVersion >= 0
         ? settings.recipeSeedVersion

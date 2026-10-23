@@ -5,6 +5,11 @@ export const ICONS = {
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="m5 12.5 4.5 4.5L19 7.5" />
     </svg>`,
+  move: `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M4 12h15" />
+      <path d="m13 6 6 6-6 6" />
+    </svg>`,
   trash: `
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="M4 7h16M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7" />

@@ -1,8 +1,60 @@
-/* Service worker registration and update handling. */
+/* Service worker registration, update handling, and install prompt capture. */
 
 import { showToast } from './ui.js';
 
 let registration = null;
+let deferredInstallPrompt = null;
+const installListeners = new Set();
+
+function notifyInstallListeners() {
+  for (const listener of installListeners) {
+    try {
+      listener();
+    } catch (error) {
+      console.error('Install listener failed', error);
+    }
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeinstallprompt', (event) => {
+    // Keep the browser's mini-infobar out of the way and offer our own button.
+    event.preventDefault();
+    deferredInstallPrompt = event;
+    notifyInstallListeners();
+  });
+
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    notifyInstallListeners();
+  });
+}
+
+export function canInstall() {
+  return Boolean(deferredInstallPrompt);
+}
+
+export function onInstallAvailabilityChange(listener) {
+  installListeners.add(listener);
+  return () => installListeners.delete(listener);
+}
+
+/** Shows the browser install prompt once. Returns the user's choice. */
+export async function promptInstall() {
+  const prompt = deferredInstallPrompt;
+  if (!prompt) return { outcome: 'unavailable' };
+
+  deferredInstallPrompt = null;
+  notifyInstallListeners();
+
+  try {
+    prompt.prompt();
+    const choice = await prompt.userChoice;
+    return choice || { outcome: 'dismissed' };
+  } finally {
+    notifyInstallListeners();
+  }
+}
 
 export function initPwa() {
   if (!('serviceWorker' in navigator)) return;

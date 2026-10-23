@@ -405,6 +405,15 @@ export function recordExport(exportedAt = nowIso()) {
   return timestamp;
 }
 
+export function setKeepAwake(enabled) {
+  const next = Boolean(enabled);
+  if (state.settings.keepAwake === next) return false;
+
+  state.settings.keepAwake = next;
+  commit();
+  return true;
+}
+
 export function inspectBackup(input) {
   const parsed = typeof input === 'string' ? readBackup(input) : parseBackup(input);
   return {
@@ -545,6 +554,133 @@ export function moveItem(listId, itemId, targetListId) {
   touchList(target);
   commit();
   return { item: movedItem, sourceList: source, targetList: target, merged };
+}
+
+/**
+ * Moves several items in one commit. Matching target rows combine quantities
+ * exactly like a single move; source rows that merge are tombstoned.
+ */
+export function moveItems(listId, itemIds, targetListId) {
+  if (listId === targetListId) return null;
+
+  const source = state.lists.find((entry) => entry.id === listId);
+  const target = state.lists.find(
+    (entry) => entry.id === targetListId && !entry.archivedAt
+  );
+  if (!source || !target) return null;
+
+  const ids = new Set(
+    (Array.isArray(itemIds) ? itemIds : []).filter((id) => typeof id === 'string')
+  );
+  if (!ids.size) {
+    return { moved: 0, merged: 0, sourceList: source, targetList: target };
+  }
+
+  const timestamp = nowIso();
+  let moved = 0;
+  let merged = 0;
+  const selected = source.items.filter(
+    (item) => ids.has(item.id) && !item.deletedAt && item.name
+  );
+
+  for (const item of selected) {
+    const existing = findVisibleMatch(target, item);
+
+    if (existing) {
+      // Keep the target row checked only when both copies were already picked up.
+      mergeItem(existing, item, {
+        checked: Boolean(existing.checked && item.checked),
+        timestamp,
+      });
+      item.deletedAt = timestamp;
+      item.updatedAt = timestamp;
+      merged += 1;
+    } else {
+      const index = source.items.indexOf(item);
+      if (index === -1) continue;
+      source.items.splice(index, 1);
+      target.items.push(item);
+      item.updatedAt = timestamp;
+    }
+
+    moved += 1;
+  }
+
+  if (moved) {
+    touchList(source);
+    touchList(target);
+    commit();
+  }
+
+  return { moved, merged, sourceList: source, targetList: target };
+}
+
+/** Tombstones several items with one notification and save. */
+export function deleteItems(listId, itemIds) {
+  const list = state.lists.find((entry) => entry.id === listId);
+  if (!list) return null;
+
+  const ids = new Set(
+    (Array.isArray(itemIds) ? itemIds : []).filter((id) => typeof id === 'string')
+  );
+  const deletedIds = [];
+  if (!ids.size) return { deleted: 0, itemIds: deletedIds, list };
+
+  const timestamp = nowIso();
+  for (const item of list.items) {
+    if (!item.deletedAt && item.name && ids.has(item.id)) {
+      item.deletedAt = timestamp;
+      item.updatedAt = timestamp;
+      deletedIds.push(item.id);
+    }
+  }
+
+  if (deletedIds.length) {
+    touchList(list);
+    commit();
+  }
+
+  return { deleted: deletedIds.length, itemIds: deletedIds, list };
+}
+
+/** Restores several tombstoned items in one commit. */
+export function restoreItems(listId, itemIds) {
+  const list = state.lists.find((entry) => entry.id === listId);
+  if (!list) return null;
+
+  const ids = new Set(
+    (Array.isArray(itemIds) ? itemIds : []).filter((id) => typeof id === 'string')
+  );
+  const restoredIds = [];
+  if (!ids.size) return { restored: 0, itemIds: restoredIds, list };
+
+  const timestamp = nowIso();
+  for (const item of list.items) {
+    if (item.deletedAt && ids.has(item.id)) {
+      item.deletedAt = null;
+      item.updatedAt = timestamp;
+      restoredIds.push(item.id);
+    }
+  }
+
+  if (restoredIds.length) {
+    touchList(list);
+    commit();
+  }
+
+  return { restored: restoredIds.length, itemIds: restoredIds, list };
+}
+
+/** Removes every visible item from one list, returning ids for an undo. */
+export function clearList(listId) {
+  const list = state.lists.find((entry) => entry.id === listId);
+  if (!list) return null;
+
+  const itemIds = list.items
+    .filter((item) => !item.deletedAt && item.name)
+    .map((item) => item.id);
+  const result = deleteItems(listId, itemIds);
+  return result ? { ...result, cleared: result.deleted } : null;
 }
 
 export function restoreItem(listId, itemId) {

@@ -2,7 +2,12 @@
 
 import { VERSION } from '../config.js';
 import * as store from '../store.js';
-import { checkForUpdates } from '../pwa.js';
+import {
+  canInstall,
+  checkForUpdates,
+  onInstallAvailabilityChange,
+  promptInstall,
+} from '../pwa.js';
 import { createSheetController } from '../sheet.js';
 import { ICONS, showToast } from '../ui.js';
 
@@ -44,16 +49,23 @@ export function mount(root) {
   let active = true;
   let restoreSheet = null;
   let pendingImport = null;
+  let unsubInstall = null;
 
   function render() {
     if (restoreSheet) {
       restoreSheet.destroy();
       restoreSheet = null;
     }
+    if (unsubInstall) {
+      unsubInstall();
+      unsubInstall = null;
+    }
 
     const info = store.getStorageInfo();
     const summary = store.getDataSummary();
-    const lastExportAt = store.getState().settings.lastExportAt;
+    const settings = store.getState().settings;
+    const lastExportAt = settings.lastExportAt;
+    const wakeLockSupported = 'wakeLock' in navigator;
 
     root.innerHTML = `
       <h1 class="page-title">More</h1>
@@ -76,8 +88,8 @@ export function mount(root) {
           <button class="btn" id="check-updates" type="button">Check for updates</button>
         </div>
         <p class="card__note">
-          No accounts and no server. Nothing leaves this device unless you export it or hand a
-          trip to Google Calendar.
+          No accounts and no server. Nothing leaves this device unless you export or share it, or
+          hand a trip to Google Calendar.
         </p>
       </section>
 
@@ -104,6 +116,7 @@ export function mount(root) {
         </ul>
         <div class="btn-row backup-buttons">
           <button class="btn btn--primary" id="export-btn" type="button">Export backup</button>
+          <button class="btn" id="share-backup" type="button" hidden>Share backup</button>
           <button class="btn" id="restore-btn" type="button">Restore from file</button>
         </div>
         <input
@@ -129,6 +142,12 @@ export function mount(root) {
           Installing protects your data: Safari can clear storage for sites you have not used in a
           while, but keeps installed apps.
         </p>
+        <div class="btn-row" id="install-actions" hidden>
+          <button class="btn btn--primary" id="install-app" type="button" hidden>
+            Install app
+          </button>
+        </div>
+        <p id="install-status" class="sheet__status" role="status" aria-live="polite"></p>
         <p class="eyebrow">iPhone / iPad</p>
         <ol class="steps">
           <li>Open this page in Safari.</li>
@@ -140,6 +159,32 @@ export function mount(root) {
           <li>Open this page in Chrome.</li>
           <li>Tap the three-dot menu, then <strong>Install app</strong>.</li>
         </ol>
+      </section>
+
+      <section class="card" aria-labelledby="shopping-title">
+        <div class="card__head">
+          <h2 id="shopping-title">Shopping screen</h2>
+          <span class="badge">Optional</span>
+        </div>
+        <label class="check-row" for="keep-awake">
+          <input
+            id="keep-awake"
+            class="check-row__input"
+            type="checkbox"
+            ${settings.keepAwake ? 'checked' : ''}
+            ${wakeLockSupported ? '' : 'disabled'}
+          />
+          <span class="check-row__text">
+            <strong>Keep the screen awake in List</strong>
+            <span>
+              ${
+                wakeLockSupported
+                  ? 'Best effort while this tab is visible. Your phone can still dim for battery saver.'
+                  : 'This browser does not support the Screen Wake Lock API.'
+              }
+            </span>
+          </span>
+        </label>
       </section>
 
       <section class="card" aria-labelledby="roadmap-title">
@@ -154,6 +199,9 @@ export function mount(root) {
           <li class="is-done"><span class="roadmap__dot"></span>Backup and restore</li>
           <li class="is-done"><span class="roadmap__dot"></span>Meal plan with automatic list additions</li>
           <li class="is-done"><span class="roadmap__dot"></span>Shopping polish and list management</li>
+          <li class="is-done"><span class="roadmap__dot"></span>Bulk move, delete, and clear-list actions</li>
+          <li class="is-done"><span class="roadmap__dot"></span>Install prompt and backup sharing</li>
+          <li class="is-done"><span class="roadmap__dot"></span>Keep-awake shopping option</li>
           <li class="is-current"><span class="roadmap__dot"></span>Phase 5 — merge between two phones</li>
         </ul>
       </section>
@@ -188,13 +236,71 @@ export function mount(root) {
   function bind() {
     const updatesButton = root.querySelector('#check-updates');
     const exportButton = root.querySelector('#export-btn');
+    const shareButton = root.querySelector('#share-backup');
     const restoreButton = root.querySelector('#restore-btn');
     const fileInput = root.querySelector('#restore-file');
     const status = root.querySelector('#backup-status');
     const restoreDialog = root.querySelector('#restore-dialog');
     const restoreStatus = root.querySelector('#restore-status');
+    const installActions = root.querySelector('#install-actions');
+    const installButton = root.querySelector('#install-app');
+    const installStatus = root.querySelector('#install-status');
+    const lastBackupValue = root.querySelector('#last-backup');
+
+    function markExported(exportedAt) {
+      store.recordExport(exportedAt);
+      if (lastBackupValue) lastBackupValue.textContent = formatBackupDate(exportedAt);
+    }
 
     if (updatesButton) updatesButton.addEventListener('click', checkForUpdates);
+
+    const keepAwake = root.querySelector('#keep-awake');
+    if (keepAwake) {
+      keepAwake.addEventListener('change', () => {
+        store.setKeepAwake(keepAwake.checked);
+        showToast(
+          keepAwake.checked
+            ? 'Screen will stay awake in List.'
+            : 'List can let the screen sleep.'
+        );
+      });
+    }
+
+    if (installButton) {
+      const syncInstallButton = () => {
+        const available = canInstall();
+        installActions.hidden = !available;
+        installButton.hidden = !available;
+        installButton.disabled = false;
+      };
+
+      syncInstallButton();
+      unsubInstall = onInstallAvailabilityChange(syncInstallButton);
+
+      installButton.addEventListener('click', async () => {
+        installStatus.textContent = '';
+        installButton.disabled = true;
+
+        try {
+          const choice = await promptInstall();
+          if (choice.outcome === 'accepted') {
+            installStatus.textContent = 'Install accepted. Launch Grocery Planner from your Home Screen.';
+            showToast('Installing Grocery Planner…');
+          } else if (choice.outcome === 'dismissed') {
+            installStatus.textContent =
+              'Install dismissed. You can install later from your browser menu.';
+          } else {
+            installStatus.textContent =
+              'Use your browser menu to install this app on your device.';
+          }
+        } catch (error) {
+          console.error('Install prompt failed', error);
+          installStatus.textContent = 'Could not open the install prompt. Use your browser menu.';
+        } finally {
+          syncInstallButton();
+        }
+      });
+    }
 
     restoreSheet = createSheetController(restoreDialog, {
       trigger: () => root.querySelector('#restore-btn'),
@@ -221,9 +327,7 @@ export function mount(root) {
         link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 10000);
 
-        store.recordExport(backup.exportedAt);
-        const lastBackup = root.querySelector('#last-backup');
-        if (lastBackup) lastBackup.textContent = formatBackupDate(backup.exportedAt);
+        markExported(backup.exportedAt);
         status.textContent = `Backup downloaded: ${summaryLabel(store.getDataSummary())}.`;
         showToast('Backup downloaded.');
       } catch (error) {
@@ -232,6 +336,73 @@ export function mount(root) {
         showToast('Could not create the backup.');
       }
     });
+
+    const canShareFiles =
+      typeof navigator.share === 'function' &&
+      typeof File === 'function' &&
+      (typeof navigator.canShare !== 'function' ||
+        (() => {
+          try {
+            return navigator.canShare({
+              files: [
+                new File(['{}'], 'backup.json', { type: 'application/json' }),
+              ],
+            });
+          } catch (error) {
+            return false;
+          }
+        })());
+    const canCopyBackup = Boolean(
+      navigator.clipboard && typeof navigator.clipboard.writeText === 'function'
+    );
+    const shareMode = canShareFiles ? 'share' : canCopyBackup ? 'copy' : null;
+
+    if (shareButton) {
+      shareButton.hidden = !shareMode;
+      if (shareMode === 'copy') shareButton.textContent = 'Copy backup';
+
+      shareButton.addEventListener('click', async () => {
+        status.textContent = '';
+
+        try {
+          const backup = store.createBackup();
+          const payload = JSON.stringify(backup, null, 2);
+
+          if (shareMode === 'share') {
+            const file = new File(
+              [payload],
+              `grocery-planner-backup-${backup.exportedAt.slice(0, 10)}.json`,
+              { type: 'application/json' }
+            );
+
+            if (navigator.canShare && !navigator.canShare({ files: [file] })) {
+              status.textContent = 'Sharing files is not available in this browser.';
+              return;
+            }
+
+            await navigator.share({
+              files: [file],
+              title: 'Grocery Planner backup',
+              text: 'Backup of my grocery lists and meal plan.',
+            });
+            markExported(backup.exportedAt);
+            status.textContent = `Backup shared: ${summaryLabel(store.getDataSummary())}.`;
+            showToast('Backup shared.');
+            return;
+          }
+
+          await navigator.clipboard.writeText(payload);
+          markExported(backup.exportedAt);
+          status.textContent = `Backup copied: ${summaryLabel(store.getDataSummary())}.`;
+          showToast('Backup copied to the clipboard.');
+        } catch (error) {
+          if (error && error.name === 'AbortError') return;
+          console.error('Backup share failed', error);
+          status.textContent = 'Could not share the backup. Try Export backup instead.';
+          showToast('Could not share the backup.');
+        }
+      });
+    }
 
     restoreButton.addEventListener('click', () => fileInput.click());
 
@@ -297,6 +468,10 @@ export function mount(root) {
 
   return () => {
     active = false;
+    if (unsubInstall) {
+      unsubInstall();
+      unsubInstall = null;
+    }
     if (restoreSheet) {
       restoreSheet.destroy();
       restoreSheet = null;

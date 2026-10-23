@@ -9,9 +9,9 @@ exporting/importing a JSON file. Hosted free on GitHub Pages.
 - **Storage:** IndexedDB (single state document) with localStorage fallback
 - **Sync:** manual export/import only (no server, no accounts, no network calls)
 
-**Status:** Phases 0–1 implemented, plus per-store lists, Google Calendar trip export, seeded
-recipes, item/recipe editing, JSON backup/restore, weekly meal planning, and shopping/list-
-management polish. Two-phone merge is next.
+**Status:** Phases 0–4 implemented, plus per-store lists, Google Calendar trip export, seeded
+recipes, item/recipe editing, JSON backup/restore, weekly meal planning, bulk list actions, and
+shopping/list-management polish. Phase 6 is complete. Two-phone merge is next.
 
 ---
 
@@ -74,8 +74,9 @@ Bottom tab bar for Plan / List / Recipes / More.
   without adding ingredients.
 - **Shop:** check items off one-handed; checked items sink to the bottom of their aisle; list
   survives app kill and offline reloads.
-- **Share:** export produces `grocery-planner-backup-YYYY-MM-DD.json`; send via
-  AirDrop/iMessage/Files. Import validates and replaces after confirmation; merge is Phase 5.
+- **Share:** export produces `grocery-planner-backup-YYYY-MM-DD.json`; use the system share sheet
+  when available, copy the JSON to the clipboard, or send the downloaded file via AirDrop/iMessage/
+  Files. Import validates and replaces after confirmation; merge is Phase 5.
 - **Backup nudge:** if no export in N days, show a dismissible banner on the list screen.
 
 ### Data model sketch
@@ -84,7 +85,7 @@ Bottom tab bar for Plan / List / Recipes / More.
   "format": "grocery-planner-backup",
   "formatVersion": 1,
   "schemaVersion": 1,
-  "appVersion": "0.9.2",
+  "appVersion": "0.9.3",
   "exportedAt": "2026-10-22T15:00:00.000Z",
   "state": {
     "recipes": [{
@@ -251,6 +252,20 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 - **Accept:** add “2 cups flour” twice and see one row with 4 cups; move it to another list; reload
   and confirm both lists persist. Done.
 
+### Phase 2.6 — Bulk list actions (done, v0.9.3)
+- **Select** turns list rows into selection checkboxes without changing their picked state. The
+  bottom action bar can select/deselect all, move the selected rows to another list, delete them,
+  or clear the entire list.
+- Moving several rows uses one commit and the same matching rules as a single move: matching target
+  rows combine quantities and per-meal contributions, and checked rows stay checked only when both
+  copies were already picked up.
+- Bulk delete and clear list use one commit each and show an **Undo** toast. Clearing asks for
+  confirmation first; undoing restores every cleared row.
+- Selection is scoped to the active list and exits automatically after a move, delete, clear, or
+  list switch.
+- **Accept:** select two rows, move them to another list, combine a matching quantity, clear the
+  source list, and undo both actions. Done.
+
 ### Phase 3 — Recipes (done, v0.5.1; reorder and scaling queued)
 - Recipe list with search and category filters; create/edit form with a simple ingredient textarea.
 - Ingredient model: name, qty, unit, aisle (auto-suggested); leading quantities are parsed.
@@ -275,14 +290,15 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 - **Accept:** both phones edit different items → merge keeps both. Delete on A, edit on B → no
   zombie resurrection. Round-trip A → B → A is stable (idempotent).
 
-### Phase 6 — Polish pass (1–2 days)
+### Phase 6 — Polish pass (done, v0.9.3)
 - Install help page per platform (iOS Share → Add to Home Screen; Android/desktop install button).
 - Chrome/Edge install UX: capture `beforeinstallprompt`, show an "Install app" button in More, and
   hide it on iOS where the event never fires; listen for `appinstalled`.
 - Service worker update toast ("New version — reload"), version stamped in Settings.
-- Screen Wake Lock in shopping mode (best effort, ignored if unsupported).
+- Optional Screen Wake Lock in List (best effort, reacquired when the tab becomes visible, ignored
+  if unsupported or denied).
 - Print stylesheet for the list; dark mode; reduced-motion; focus states; ARIA labels.
-- Web Share API for export when available, clipboard fallback.
+- Web Share API for export when available, clipboard fallback, and the existing download fallback.
 - `README.md` with architecture, deploy steps, and "how to release" checklist.
 - **Accept:** Lighthouse PWA/installability passes; VoiceOver reads list items and check state.
 

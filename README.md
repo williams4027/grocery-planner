@@ -120,6 +120,9 @@ PLAN.md                 product plan, data model, phase breakdown
 - Automatic aisle grouping (produce, dairy, pantry, …) with sticky headers.
 - Check items off; picked items dim, sink within their aisle, and both the list counter and each
   aisle’s progress update. Delete an item with one tap and use **Undo** in the toast if needed.
+- Tap the **Select** button to choose several rows. Move the selected items to another list (matching
+  rows combine quantities), delete them together, or clear the whole list. Delete and clear both
+  offer **Undo**; clearing a list asks for confirmation first.
 - Rename the active list inline. Open **Manage lists** to duplicate a list (including its checked
   items), archive a list without deleting anything, or restore an archived list later. The last
   visible list cannot be archived.
@@ -139,9 +142,15 @@ PLAN.md                 product plan, data model, phase breakdown
   the quantity. Items you already checked off are kept.
 - Everything persists in IndexedDB on the device, survives force-quit, and works offline.
 - **Export backup** in More downloads a JSON copy of every list, item, recipe, planned meal, and
-  setting. **Restore from file** validates the backup first, shows what it contains, and only
-  replaces data after you confirm. A corrupt or newer-version file is rejected without touching
-  existing data.
+  setting. On browsers that support it, **Share backup** opens the system share sheet; otherwise
+  **Copy backup** puts the JSON on the clipboard. **Restore from file** validates the backup first,
+  shows what it contains, and only replaces data after you confirm. A corrupt or newer-version file
+  is rejected without touching existing data.
+- **Install app** appears in More when Chrome or Edge offers an install prompt. On iPhone and iPad,
+  follow the Share → Add to Home Screen steps in the same card.
+- More also has an optional **Keep the screen awake in List** switch. It uses the Screen Wake Lock
+  API when the browser supports it, so the phone does not lock while you shop; it is reacquired when
+  you return to the tab and can still be overridden by battery saver.
 - Storage failures (private mode, quota) surface as a banner instead of failing silently.
 
 ## Data and privacy

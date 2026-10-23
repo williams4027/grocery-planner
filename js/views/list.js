@@ -14,6 +14,11 @@ export function mount(root) {
   let lastActiveChipId = null;
   let editingItemId = null;
   let lastItemTrigger = null;
+  let selecting = false;
+  let selectionListId = null;
+  const selectedItemIds = new Set();
+  let wakeLock = null;
+  let wakeLockPending = false;
 
   document.body.classList.add('has-add-dock');
 
@@ -24,6 +29,16 @@ export function mount(root) {
         <p class="list-count" id="list-count" aria-live="polite"></p>
       </div>
       <div class="page-head__actions">
+        <button
+          class="icon-btn"
+          id="select-btn"
+          type="button"
+          aria-label="Select items"
+          title="Select items"
+          aria-pressed="false"
+        >
+          ${ICONS.move}
+        </button>
         <button
           class="icon-btn"
           id="calendar-btn"
@@ -77,7 +92,7 @@ export function mount(root) {
       <div id="items" class="items" tabindex="-1" aria-label="List items"></div>
     </section>
 
-    <div class="add-dock">
+    <div class="add-dock" id="add-dock">
       <button
         class="fab"
         id="add-fab"
@@ -88,6 +103,28 @@ export function mount(root) {
         <span class="fab__icon" aria-hidden="true">${ICONS.plus}</span>
         <span>Add item</span>
       </button>
+    </div>
+
+    <div class="bulk-dock" id="bulk-dock" hidden>
+      <div class="bulk-dock__inner">
+        <div class="bulk-dock__head">
+          <p class="bulk-dock__count" id="bulk-count" aria-live="polite">Tap items to select</p>
+          <div class="bulk-dock__links">
+            <button class="bulk-link" id="bulk-select-all" type="button">Select all</button>
+            <button class="bulk-link" id="bulk-cancel" type="button">Cancel</button>
+          </div>
+        </div>
+        <div class="bulk-dock__actions">
+          <button class="btn bulk-btn" id="bulk-move" type="button" aria-haspopup="dialog">
+            ${ICONS.move}
+            <span>Move<span class="bulk-btn__suffix"> to&hellip;</span></span>
+          </button>
+          <button class="btn bulk-btn" id="bulk-delete" type="button">Delete</button>
+          <button class="btn bulk-btn bulk-btn--danger" id="bulk-clear" type="button">
+            Clear list
+          </button>
+        </div>
+      </div>
     </div>
 
     <dialog id="add-dialog" class="sheet" aria-labelledby="sheet-title">
@@ -206,6 +243,26 @@ export function mount(root) {
       <p id="manage-lists-status" class="sheet__status" role="status" aria-live="polite"></p>
     </dialog>
 
+    <dialog id="move-dialog" class="sheet" aria-labelledby="move-title">
+      <div class="sheet__handle" aria-hidden="true"></div>
+      <div class="sheet__head">
+        <h2 id="move-title">Move items</h2>
+        <button class="sheet__close" id="move-close" type="button" aria-label="Close">
+          ${ICONS.close}
+        </button>
+      </div>
+
+      <form id="move-form" class="move-form">
+        <p id="move-summary" class="card__note move-summary"></p>
+        <div id="move-options" class="move-options" role="radiogroup" aria-label="Target list"></div>
+        <button class="btn btn--primary new-list__submit" id="move-submit" type="submit">
+          Move items
+        </button>
+      </form>
+
+      <p id="move-status" class="sheet__status" role="status" aria-live="polite"></p>
+    </dialog>
+
     <dialog id="calendar-dialog" class="sheet" aria-labelledby="calendar-title">
       <div class="sheet__handle" aria-hidden="true"></div>
       <div class="sheet__head">
@@ -252,12 +309,21 @@ export function mount(root) {
   const refs = {
     nameSlot: root.querySelector('#name-slot'),
     renameButton: root.querySelector('#rename-btn'),
+    selectButton: root.querySelector('#select-btn'),
     calendarButton: root.querySelector('#calendar-btn'),
     count: root.querySelector('#list-count'),
     chips: root.querySelector('#list-chips'),
     newListChip: root.querySelector('#new-list-chip'),
     warning: root.querySelector('#storage-warning'),
     items: root.querySelector('#items'),
+    addDock: root.querySelector('#add-dock'),
+    bulkDock: root.querySelector('#bulk-dock'),
+    bulkCount: root.querySelector('#bulk-count'),
+    bulkSelectAll: root.querySelector('#bulk-select-all'),
+    bulkCancel: root.querySelector('#bulk-cancel'),
+    bulkMove: root.querySelector('#bulk-move'),
+    bulkDelete: root.querySelector('#bulk-delete'),
+    bulkClear: root.querySelector('#bulk-clear'),
     fab: root.querySelector('#add-fab'),
     dialog: root.querySelector('#add-dialog'),
     sheetTitle: root.querySelector('#sheet-title'),
@@ -282,6 +348,14 @@ export function mount(root) {
     manageClose: root.querySelector('#manage-lists-close'),
     manageBody: root.querySelector('#manage-lists-body'),
     manageStatus: root.querySelector('#manage-lists-status'),
+    moveDialog: root.querySelector('#move-dialog'),
+    moveClose: root.querySelector('#move-close'),
+    moveForm: root.querySelector('#move-form'),
+    moveTitle: root.querySelector('#move-title'),
+    moveSummary: root.querySelector('#move-summary'),
+    moveOptions: root.querySelector('#move-options'),
+    moveSubmit: root.querySelector('#move-submit'),
+    moveStatus: root.querySelector('#move-status'),
     calendarDialog: root.querySelector('#calendar-dialog'),
     calendarClose: root.querySelector('#calendar-close'),
     calendarForm: root.querySelector('#calendar-form'),
@@ -301,6 +375,16 @@ export function mount(root) {
     renderAddListOptions();
 
     const list = currentList();
+
+    if (selecting && (!list || list.id !== selectionListId)) endSelection();
+    if (selecting && list) {
+      const currentIds = new Set(store.visibleItems(list).map((item) => item.id));
+      for (const itemId of [...selectedItemIds]) {
+        if (!currentIds.has(itemId)) selectedItemIds.delete(itemId);
+      }
+      if (!currentIds.size) endSelection();
+    }
+
     renderChips();
 
     if (!list) {
@@ -308,6 +392,7 @@ export function mount(root) {
       refs.count.textContent = '';
       refs.items.replaceChildren();
       refs.calendarButton.disabled = true;
+      applySelectionMode();
       return;
     }
 
@@ -315,7 +400,108 @@ export function mount(root) {
     renderName(list);
     renderCount(list);
     renderItems(list);
+    applySelectionMode();
     if (refs.manageDialog.open) renderManageLists();
+  }
+
+  function endSelection() {
+    selecting = false;
+    selectionListId = null;
+    selectedItemIds.clear();
+  }
+
+  function startSelection() {
+    const list = currentList();
+    if (!list || !store.visibleItems(list).length) return;
+
+    selecting = true;
+    selectionListId = list.id;
+    selectedItemIds.clear();
+    render();
+    refs.items.focus({ preventScroll: true });
+  }
+
+  function applySelectionMode() {
+    const list = currentList();
+    const visible = list ? store.visibleItems(list) : [];
+
+    if (selecting && !visible.length) endSelection();
+
+    refs.addDock.hidden = selecting;
+    refs.bulkDock.hidden = !selecting;
+    refs.selectButton.disabled = !visible.length;
+    refs.selectButton.classList.toggle('is-active', selecting);
+    refs.selectButton.setAttribute('aria-pressed', selecting ? 'true' : 'false');
+    refs.selectButton.setAttribute('aria-label', selecting ? 'Cancel selection' : 'Select items');
+    refs.selectButton.title = selecting ? 'Cancel selection' : 'Select items';
+    refs.items.classList.toggle('is-selecting', selecting);
+    refs.items.setAttribute(
+      'aria-label',
+      selecting ? 'Select items to move or remove' : 'List items'
+    );
+    document.body.classList.toggle('is-selecting', selecting);
+    updateSelectionBar(visible);
+  }
+
+  function updateSelectionBar(visible = null) {
+    const list = currentList();
+    const items = visible || (list ? store.visibleItems(list) : []);
+    const count = selectedItemIds.size;
+    const allSelected = items.length > 0 && count === items.length;
+    const otherLists = list
+      ? store.visibleLists().filter((entry) => entry.id !== list.id)
+      : [];
+
+    refs.bulkCount.textContent = count
+      ? `${count} selected`
+      : 'Tap items to select';
+    refs.bulkSelectAll.textContent = allSelected ? 'Deselect all' : 'Select all';
+    refs.bulkSelectAll.disabled = !items.length;
+    refs.bulkMove.disabled = count === 0;
+    refs.bulkMove.title = otherLists.length
+      ? 'Move selected items to another list'
+      : 'Create another list before moving items';
+    refs.bulkDelete.disabled = count === 0;
+    refs.bulkClear.disabled = !items.length;
+  }
+
+  async function acquireWakeLock() {
+    if (
+      !store.getState().settings.keepAwake ||
+      !('wakeLock' in navigator) ||
+      document.visibilityState !== 'visible' ||
+      wakeLock ||
+      wakeLockPending
+    ) {
+      return;
+    }
+
+    wakeLockPending = true;
+    try {
+      const lock = await navigator.wakeLock.request('screen');
+      wakeLock = lock;
+      lock.addEventListener('release', () => {
+        if (wakeLock === lock) wakeLock = null;
+      });
+    } catch (error) {
+      // Wake Lock is best-effort; browsers may deny it when the battery is low.
+      wakeLock = null;
+    } finally {
+      wakeLockPending = false;
+    }
+  }
+
+  function releaseWakeLock() {
+    if (!wakeLock) return;
+
+    const lock = wakeLock;
+    wakeLock = null;
+    lock.release().catch(() => {});
+  }
+
+  function handleVisibilityChange() {
+    if (document.visibilityState === 'visible') acquireWakeLock();
+    else releaseWakeLock();
   }
 
   function renderWarning() {
@@ -668,10 +854,18 @@ export function mount(root) {
   function itemNode(item) {
     const checkboxId = `cb-${item.id}`;
     const quantity = formatQuantity(item);
+    const isSelected = selecting && selectedItemIds.has(item.id);
+    const classes = [
+      'item',
+      !selecting && item.checked ? 'is-done' : '',
+      isSelected ? 'is-selected' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
 
     return h(
       'li',
-      { class: `item${item.checked ? ' is-done' : ''}`, dataset: { id: item.id } },
+      { class: classes, dataset: { id: item.id } },
       h(
         'label',
         { class: 'item__label', for: checkboxId },
@@ -679,7 +873,7 @@ export function mount(root) {
           class: 'item__checkbox',
           type: 'checkbox',
           id: checkboxId,
-          checked: item.checked,
+          checked: selecting ? isSelected : item.checked,
           dataset: { id: item.id, action: 'toggle' },
         }),
         h('span', { class: 'item__box', 'aria-hidden': 'true' }, icon('check')),
@@ -690,31 +884,33 @@ export function mount(root) {
           quantity ? h('span', { class: 'item__qty' }, quantity) : null
         )
       ),
-      h(
-        'div',
-        { class: 'item__actions' },
-        h(
-          'button',
-          {
-            class: 'item__edit',
-            type: 'button',
-            dataset: { id: item.id, action: 'edit' },
-            'aria-label': `Edit or move ${item.name}`,
-            title: 'Edit or move',
-          },
-          icon('pencil')
-        ),
-        h(
-          'button',
-          {
-            class: 'item__delete',
-            type: 'button',
-            dataset: { id: item.id, action: 'delete' },
-            'aria-label': `Delete ${item.name}`,
-          },
-          icon('trash')
-        )
-      )
+      selecting
+        ? null
+        : h(
+            'div',
+            { class: 'item__actions' },
+            h(
+              'button',
+              {
+                class: 'item__edit',
+                type: 'button',
+                dataset: { id: item.id, action: 'edit' },
+                'aria-label': `Edit or move ${item.name}`,
+                title: 'Edit or move',
+              },
+              icon('pencil')
+            ),
+            h(
+              'button',
+              {
+                class: 'item__delete',
+                type: 'button',
+                dataset: { id: item.id, action: 'delete' },
+                'aria-label': `Delete ${item.name}`,
+              },
+              icon('trash')
+            )
+          )
     );
   }
 
@@ -758,6 +954,57 @@ export function mount(root) {
     renderAddListOptions({ forceActive: true });
   }
 
+  function prepareMoveSheet() {
+    const list = currentList();
+    if (!list) {
+      moveSheet.close();
+      return;
+    }
+
+    const count = selectedItemIds.size;
+    const targets = store.visibleLists().filter((entry) => entry.id !== list.id);
+
+    refs.moveTitle.textContent = count === 1 ? 'Move 1 item' : `Move ${count} items`;
+    refs.moveSummary.textContent = count
+      ? `Choose a list for the selected item${count === 1 ? '' : 's'}. Matching items will combine quantities.`
+      : 'Select at least one item first.';
+    refs.moveStatus.textContent = '';
+    refs.moveSubmit.disabled = !count || !targets.length;
+
+    if (!targets.length) {
+      refs.moveOptions.replaceChildren(
+        h('p', { class: 'move-empty' }, 'Create another list before moving items.')
+      );
+      return;
+    }
+
+    refs.moveOptions.replaceChildren(
+      ...targets.map((target, index) => {
+        const itemCount = store.visibleItems(target).length;
+        return h(
+          'label',
+          { class: 'move-option' },
+          h('input', {
+            type: 'radio',
+            name: 'move-target',
+            value: target.id,
+            checked: index === 0,
+          }),
+          h(
+            'span',
+            { class: 'move-option__text' },
+            h('span', { class: 'move-option__name' }, target.name),
+            h(
+              'span',
+              { class: 'move-option__meta' },
+              `${itemCount} item${itemCount === 1 ? '' : 's'}`
+            )
+          )
+        );
+      })
+    );
+  }
+
   const addSheet = createSheetController(refs.dialog, {
     trigger: () =>
       lastItemTrigger && lastItemTrigger.isConnected ? lastItemTrigger : refs.fab,
@@ -786,6 +1033,15 @@ export function mount(root) {
     onOpen: renderManageLists,
     onClose: () => {
       refs.manageStatus.textContent = '';
+    },
+  });
+
+  const moveSheet = createSheetController(refs.moveDialog, {
+    trigger: () => refs.selectButton,
+    initialFocus: () => refs.moveOptions.querySelector('input') || refs.moveClose,
+    onOpen: prepareMoveSheet,
+    onClose: () => {
+      refs.moveStatus.textContent = '';
     },
   });
 
@@ -891,12 +1147,159 @@ export function mount(root) {
     const chip = event.target.closest('button[data-list-id]');
     if (!chip) return;
 
+    const wasSelecting = selecting;
+    if (selecting) endSelection();
+
     if (store.setActiveList(chip.dataset.listId)) {
       window.scrollTo({ top: 0 });
+    } else if (wasSelecting) {
+      render();
     }
   });
 
   refs.newListChip.addEventListener('click', () => newListSheet.open());
+
+  /* ---------- Bulk selection ---------- */
+
+  refs.selectButton.addEventListener('click', () => {
+    if (renaming) return;
+
+    if (selecting) {
+      endSelection();
+      render();
+      refs.selectButton.focus({ preventScroll: true });
+    } else {
+      startSelection();
+    }
+  });
+
+  refs.bulkCancel.addEventListener('click', () => {
+    endSelection();
+    render();
+    refs.selectButton.focus({ preventScroll: true });
+  });
+
+  refs.bulkSelectAll.addEventListener('click', () => {
+    const list = currentList();
+    if (!list) return;
+
+    const visible = store.visibleItems(list);
+    if (visible.length && selectedItemIds.size === visible.length) {
+      selectedItemIds.clear();
+    } else {
+      for (const item of visible) selectedItemIds.add(item.id);
+    }
+
+    render();
+    refs.bulkSelectAll.focus({ preventScroll: true });
+  });
+
+  refs.bulkMove.addEventListener('click', () => {
+    if (!selectedItemIds.size) return;
+    moveSheet.open();
+  });
+
+  refs.bulkDelete.addEventListener('click', () => {
+    const list = currentList();
+    const ids = [...selectedItemIds];
+    if (!list || !ids.length) return;
+
+    endSelection();
+    const result = store.deleteItems(list.id, ids);
+    if (!result || !result.deleted) {
+      render();
+      showToast('Those items could not be removed.');
+      return;
+    }
+
+    const count = result.deleted;
+    showToast(`Removed ${count} item${count === 1 ? '' : 's'}.`, {
+      duration: 6000,
+      actionLabel: 'Undo',
+      onAction: () => {
+        const restored = store.restoreItems(list.id, result.itemIds);
+        if (!restored || !restored.restored) {
+          showToast('Could not restore those items.');
+          return;
+        }
+        showToast(`${restored.restored} item${restored.restored === 1 ? '' : 's'} restored.`);
+        refs.items.focus({ preventScroll: true });
+      },
+    });
+    refs.items.focus({ preventScroll: true });
+  });
+
+  refs.bulkClear.addEventListener('click', () => {
+    const list = currentList();
+    if (!list) return;
+
+    const visible = store.visibleItems(list);
+    if (!visible.length) return;
+
+    const count = visible.length;
+    if (
+      !window.confirm(
+        `Remove all ${count} item${count === 1 ? '' : 's'} from “${list.name}”? You can undo this.`
+      )
+    ) {
+      return;
+    }
+
+    endSelection();
+    const result = store.clearList(list.id);
+    if (!result || !result.cleared) {
+      render();
+      showToast('Could not clear that list.');
+      return;
+    }
+
+    showToast(`Cleared ${result.cleared} item${result.cleared === 1 ? '' : 's'}.`, {
+      duration: 6000,
+      actionLabel: 'Undo',
+      onAction: () => {
+        const restored = store.restoreItems(list.id, result.itemIds);
+        if (!restored || !restored.restored) {
+          showToast('Could not restore those items.');
+          return;
+        }
+        showToast(`${restored.restored} item${restored.restored === 1 ? '' : 's'} restored.`);
+        refs.items.focus({ preventScroll: true });
+      },
+    });
+    refs.items.focus({ preventScroll: true });
+  });
+
+  refs.moveClose.addEventListener('click', () => moveSheet.close());
+
+  refs.moveForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+
+    const list = currentList();
+    const targetId = refs.moveForm.querySelector('input[name="move-target"]:checked')?.value;
+    const target = store.visibleLists().find((entry) => entry.id === targetId);
+    if (!list || !target || !selectedItemIds.size) {
+      refs.moveStatus.textContent = 'Choose another list before moving items.';
+      return;
+    }
+
+    const ids = [...selectedItemIds];
+    const result = store.moveItems(list.id, ids, target.id);
+    if (!result || !result.moved) {
+      refs.moveStatus.textContent = 'Those items could not be moved.';
+      return;
+    }
+
+    endSelection();
+    moveSheet.close();
+    render();
+    const combined = result.merged
+      ? ` ${result.merged} matching item${result.merged === 1 ? '' : 's'} combined.`
+      : '';
+    showToast(
+      `Moved ${result.moved} item${result.moved === 1 ? '' : 's'} to ${target.name}.${combined}`
+    );
+    refs.items.focus({ preventScroll: true });
+  });
 
   /* ---------- New list sheet ---------- */
 
@@ -1090,6 +1493,16 @@ export function mount(root) {
     const list = currentList();
     if (!list) return;
 
+    if (selecting) {
+      if (checkbox.checked) selectedItemIds.add(checkbox.dataset.id);
+      else selectedItemIds.delete(checkbox.dataset.id);
+
+      const row = checkbox.closest('.item');
+      if (row) row.classList.toggle('is-selected', checkbox.checked);
+      updateSelectionBar();
+      return;
+    }
+
     store.setItemChecked(list.id, checkbox.dataset.id, checkbox.checked);
   });
 
@@ -1140,14 +1553,20 @@ export function mount(root) {
 
   const unsubscribe = store.subscribe(render);
   render();
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  acquireWakeLock();
 
   return () => {
     unsubscribe();
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    releaseWakeLock();
     addSheet.destroy();
     newListSheet.destroy();
     manageListsSheet.destroy();
+    moveSheet.destroy();
     calendarSheet.destroy();
     document.body.classList.remove('has-add-dock');
+    document.body.classList.remove('is-selecting');
   };
 }
 
