@@ -401,6 +401,7 @@ export function mount(root) {
         : list
           ? h('p', { class: 'recipe-detail__to' }, 'Adds to ', h('strong', {}, list.name))
           : h('p', { class: 'recipe-detail__to' }, 'Create a grocery list first.'),
+      orderControls(recipe),
       h(
         'div',
         { class: 'recipe-actions' },
@@ -428,12 +429,59 @@ export function mount(root) {
         h(
           'button',
           {
+            class: 'btn recipe-duplicate',
+            type: 'button',
+            dataset: { action: 'duplicate-recipe' },
+          },
+          'Duplicate'
+        ),
+        h(
+          'button',
+          {
             class: 'recipe-remove',
             type: 'button',
             dataset: { action: 'delete-recipe' },
           },
           'Delete recipe'
         )
+      )
+    );
+  }
+
+  function orderControls(recipe) {
+    const siblings = store
+      .visibleRecipes()
+      .filter((entry) => entry.category === recipe.category);
+    if (siblings.length < 2) return null;
+
+    const index = siblings.findIndex((entry) => entry.id === recipe.id);
+    return h(
+      'div',
+      { class: 'recipe-order', role: 'group', 'aria-label': 'Reorder recipe' },
+      h('span', { class: 'recipe-order__label' }, 'Order'),
+      h(
+        'button',
+        {
+          class: 'btn recipe-order__btn',
+          type: 'button',
+          dataset: { action: 'move-recipe-up' },
+          disabled: index <= 0,
+          'aria-label': `Move ${recipe.title} up`,
+        },
+        icon('arrowUp'),
+        h('span', {}, 'Move up')
+      ),
+      h(
+        'button',
+        {
+          class: 'btn recipe-order__btn',
+          type: 'button',
+          dataset: { action: 'move-recipe-down' },
+          disabled: index === -1 || index >= siblings.length - 1,
+          'aria-label': `Move ${recipe.title} down`,
+        },
+        icon('arrowDown'),
+        h('span', {}, 'Move down')
       )
     );
   }
@@ -510,6 +558,41 @@ export function mount(root) {
           trigger: trigger && trigger.isConnected ? trigger : refs.newButton,
         });
       }, 0);
+      return;
+    }
+
+    if (
+      button.dataset.action === 'move-recipe-up' ||
+      button.dataset.action === 'move-recipe-down'
+    ) {
+      const recipe = store.getRecipe(selectedRecipeId);
+      if (!recipe) return;
+
+      const direction = button.dataset.action === 'move-recipe-up' ? -1 : 1;
+      if (!store.moveRecipe(recipe.id, direction)) return;
+
+      renderList();
+      populateDetail();
+      showToast(direction < 0 ? 'Recipe moved up.' : 'Recipe moved down.');
+      return;
+    }
+
+    if (button.dataset.action === 'duplicate-recipe') {
+      const recipe = store.getRecipe(selectedRecipeId);
+      if (!recipe) return;
+
+      const copy = store.duplicateRecipe(recipe.id);
+      if (!copy) {
+        refs.detailStatus.textContent = 'Could not duplicate that recipe.';
+        return;
+      }
+
+      selectedRecipeId = copy.id;
+      renderList();
+      const copyCard = refs.list.querySelector(`[data-recipe-id="${copy.id}"]`);
+      if (copyCard) lastRecipeTrigger = copyCard;
+      populateDetail();
+      showToast(`Duplicated “${recipe.title}”.`);
       return;
     }
 

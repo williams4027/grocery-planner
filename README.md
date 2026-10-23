@@ -5,15 +5,17 @@ be installed from Safari on an iPhone.
 
 - **No build step.** Plain HTML, CSS, and ES modules. Node is only used for the dev server and icon
   generation.
-- **No backend, no accounts.** All data stays in the browser (IndexedDB). Sharing between phones is
-  an explicit JSON export/import.
+- **No backend, no accounts.** All data stays in the browser (IndexedDB). Moving data between
+  phones is an explicit JSON export/import through a shared Google Drive folder.
 - **Offline by default.** A service worker caches the app shell, so it opens in airplane mode.
 - **Free hosting.** GitHub Pages on a custom domain: `https://cheers-studios.com/grocery-planner/`
   (the `williams4027.github.io` URL redirects there).
 
-Status: **Phase 1 plus per-store lists, Google Calendar trip export, seeded recipes, backup and
-restore, weekly meal planning, shopping/list-management polish, quantity merging, and cross-list
-moves.** Two-phone merge is next. See [PLAN.md](./PLAN.md) for the full roadmap.
+Status: **All core features are complete** — per-store lists, Google Calendar trip export, seeded
+recipes with ordering and duplication, backup and restore, weekly meal planning with `.ics` export,
+shopping/list-management polish, quantity merging, and cross-list moves. Multi-device sharing uses a
+shared Google Drive folder and manual restore; there is no automatic merge. See
+[PLAN.md](./PLAN.md) for the roadmap and optional backlog.
 
 ## Quick start
 
@@ -91,7 +93,7 @@ js/config.js            app name, version, schema version, aisles, store presets
 js/model.js             factories, aisle keyword map, ingredient parsing, normalization
 js/dates.js             local date keys, week starts, and day arithmetic
 js/backup.js            JSON backup format, parsing, and validation
-js/calendar.js          pure Google Calendar trip-detail and URL builders
+js/calendar.js          pure Google Calendar trip-detail, URL, and .ics builders
 js/store.js             state container, IndexedDB/localStorage persistence, actions
 js/seed-recipes.js      recipes seeded from the meal-planning sheet
 js/sheet.js             shared bottom-sheet dialog controller
@@ -118,8 +120,9 @@ PLAN.md                 product plan, data model, phase breakdown
   pencil on any row to edit its name, quantity, or description, or choose another list under
   **Move to** and save; delete with one tap.
 - Automatic aisle grouping (produce, dairy, pantry, …) with sticky headers.
-- Check items off; picked items dim, sink within their aisle, and both the list counter and each
-  aisle’s progress update. Delete an item with one tap and use **Undo** in the toast if needed.
+- Items are grouped by aisle and sorted A–Z within each aisle. Check items off; picked items dim,
+  sink to the bottom of their aisle, and both the list counter and each aisle’s progress update.
+  Delete an item with one tap and use **Undo** in the toast if needed.
 - Tap the **Select** button to choose several rows. Move the selected items to another list (matching
   rows combine quantities), delete them together, or clear the whole list. Delete and clear both
   offer **Undo**; clearing a list asks for confirmation first.
@@ -134,18 +137,25 @@ PLAN.md                 product plan, data model, phase breakdown
   use a shared lowercase vocabulary with one canonical choice for alternatives, so ingredients from
   different recipes combine cleanly. Save new recipes or edit a recipe’s title, category, and
   ingredient lines, including quantities; ingredient lines like “2 cups chopped carrots” are split
-  into quantity, unit, and item name automatically.
+  into quantity, unit, and item name automatically. In the recipe detail, use **Move up** and
+  **Move down** to set the order inside a category, or **Duplicate** to create a copy directly after
+  the original. Recipe-level serving scaling is deferred; the meal plan still scales by planned
+  servings.
 - **Plan a week of meals** in a 7-day × 3-slot grid. Move between weeks, jump back to today, set
   servings, copy last week into empty slots, or clear a day. Choosing a recipe adds its ingredients
   to the selected list automatically, scaled to the planned servings. Meals that share an
   ingredient keep one combined row; updating or clearing a meal removes only that meal’s share of
-  the quantity. Items you already checked off are kept.
+  the quantity. Items you already checked off are kept. **Download .ics** exports the visible week
+  as all-day events for Apple or Google Calendar; the file is built locally and never uploaded.
 - Everything persists in IndexedDB on the device, survives force-quit, and works offline.
 - **Export backup** in More downloads a JSON copy of every list, item, recipe, planned meal, and
   setting. On browsers that support it, **Share backup** opens the system share sheet; otherwise
   **Copy backup** puts the JSON on the clipboard. **Restore from file** validates the backup first,
   shows what it contains, and only replaces data after you confirm. A corrupt or newer-version file
   is rejected without touching existing data.
+- **Use a shared Google Drive folder for two phones.** Keep the newest backup there. Export on the
+  phone with the latest edits, then open that file with **Restore from file** on the other phone.
+  Import replaces local data, so don’t edit both phones independently and expect a merge.
 - **Install app** appears in More when Chrome or Edge offers an install prompt. On iPhone and iPad,
   follow the Share → Add to Home Screen steps in the same card.
 - More also has an optional **Keep the screen awake in List** switch. It uses the Screen Wake Lock
@@ -160,8 +170,8 @@ PLAN.md                 product plan, data model, phase breakdown
 - The Google Calendar handoff is a normal link. The list is placed in the URL only when you tap
   **Open Google Calendar**, so nothing is sent until you choose to continue there.
 - **iPhone caveat:** Safari can evict site storage after about seven days of non-use. Installing to
-  the Home Screen protects against this. Download a backup from More regularly and keep it in
-  Files or another safe place.
+  the Home Screen protects against this. Download a backup from More regularly and keep the newest
+  copy in the shared Drive folder or another safe place.
 - A backup is plain JSON. Treat it like a photo of your shopping list, not a secret document.
 
 ## Troubleshooting

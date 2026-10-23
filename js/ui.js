@@ -49,6 +49,16 @@ export const ICONS = {
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="m9 5 7 7-7 7" />
     </svg>`,
+  arrowUp: `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M12 19V5" />
+      <path d="m6 11 6-6 6 6" />
+    </svg>`,
+  arrowDown: `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M12 5v14" />
+      <path d="m6 13 6 6 6-6" />
+    </svg>`,
   ellipsis: `
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none" />

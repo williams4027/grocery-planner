@@ -97,6 +97,7 @@ export async function init() {
 
   ensureRecipeSeed();
   ensureListDedupe();
+  ensureRecipeOrder();
   ready = true;
   notify();
   scheduleSave();
@@ -154,12 +155,44 @@ export function visibleItems(list) {
 export function visibleRecipes() {
   return state.recipes
     .filter((recipe) => !recipe.deletedAt && recipe.title)
-    .sort((a, b) => {
-      const categoryA = RECIPE_CATEGORY_ORDER.get(a.category) ?? RECIPE_CATEGORIES.length;
-      const categoryB = RECIPE_CATEGORY_ORDER.get(b.category) ?? RECIPE_CATEGORIES.length;
-      if (categoryA !== categoryB) return categoryA - categoryB;
-      return a.title.localeCompare(b.title);
-    });
+    .sort(compareRecipes);
+}
+
+function compareRecipePosition(a, b) {
+  const positionA = Number.isFinite(a.position) ? a.position : Number.POSITIVE_INFINITY;
+  const positionB = Number.isFinite(b.position) ? b.position : Number.POSITIVE_INFINITY;
+  if (positionA !== positionB) return positionA - positionB;
+  return a.title.localeCompare(b.title);
+}
+
+function compareRecipes(a, b) {
+  const categoryA = RECIPE_CATEGORY_ORDER.get(a.category) ?? RECIPE_CATEGORIES.length;
+  const categoryB = RECIPE_CATEGORY_ORDER.get(b.category) ?? RECIPE_CATEGORIES.length;
+  if (categoryA !== categoryB) return categoryA - categoryB;
+  return compareRecipePosition(a, b);
+}
+
+function nextRecipePosition(category) {
+  let highest = -1;
+  for (const recipe of state.recipes) {
+    if (recipe.deletedAt || recipe.category !== category) continue;
+    if (Number.isFinite(recipe.position)) highest = Math.max(highest, recipe.position);
+  }
+  return highest + 1;
+}
+
+function uniqueRecipeTitle(title) {
+  const used = new Set(
+    state.recipes
+      .filter((recipe) => !recipe.deletedAt && recipe.title)
+      .map((recipe) => recipe.title.toLowerCase())
+  );
+  const base = `${title} copy`;
+  if (!used.has(base.toLowerCase())) return base;
+
+  let index = 2;
+  while (used.has(`${base} ${index}`.toLowerCase())) index += 1;
+  return `${base} ${index}`;
 }
 
 export function getRecipe(recipeId) {
@@ -170,6 +203,7 @@ export function addRecipe(input) {
   const recipe = createRecipe(input);
   if (!recipe.title) return null;
 
+  recipe.position = nextRecipePosition(recipe.category);
   state.recipes.push(recipe);
   commit();
   return recipe;
@@ -197,6 +231,7 @@ export function updateRecipe(recipeId, input = {}) {
   recipe.steps = next.steps;
   recipe.notes = next.notes;
   recipe.sourceUrl = next.sourceUrl;
+  recipe.position = next.position;
   recipe.updatedAt = nowIso();
   commit();
   return recipe;
@@ -208,6 +243,55 @@ export function deleteRecipe(recipeId) {
 
   recipe.deletedAt = nowIso();
   recipe.updatedAt = recipe.deletedAt;
+  commit();
+  return true;
+}
+
+/** Copies a recipe, placing the copy directly after the original. */
+export function duplicateRecipe(recipeId) {
+  const recipe = getRecipe(recipeId);
+  if (!recipe) return null;
+
+  const copy = createRecipe({
+    title: uniqueRecipeTitle(recipe.title),
+    category: recipe.category,
+    servings: recipe.servings,
+    ingredients: recipe.ingredients,
+    steps: recipe.steps,
+    notes: recipe.notes,
+    sourceUrl: recipe.sourceUrl,
+    position: Number.isFinite(recipe.position)
+      ? recipe.position + 0.5
+      : nextRecipePosition(recipe.category),
+  });
+
+  state.recipes.push(copy);
+  commit();
+  return copy;
+}
+
+/** Moves a recipe one place up or down inside its category. */
+export function moveRecipe(recipeId, direction) {
+  const recipe = getRecipe(recipeId);
+  if (!recipe) return false;
+
+  const step = Number(direction) < 0 ? -1 : 1;
+  const group = state.recipes
+    .filter((entry) => !entry.deletedAt && entry.title && entry.category === recipe.category)
+    .sort(compareRecipePosition);
+  const index = group.findIndex((entry) => entry.id === recipe.id);
+  const targetIndex = index + step;
+  if (index === -1 || targetIndex < 0 || targetIndex >= group.length) return false;
+
+  [group[index], group[targetIndex]] = [group[targetIndex], group[index]];
+
+  const timestamp = nowIso();
+  group.forEach((entry, position) => {
+    entry.position = position;
+    if (entry.id === recipe.id || entry.id === group[index].id) {
+      entry.updatedAt = timestamp;
+    }
+  });
   commit();
   return true;
 }
@@ -429,6 +513,7 @@ export function importBackup(input) {
   state = parsed.state;
   if (parsed.exportedAt) state.settings.lastExportAt = parsed.exportedAt;
   ensureListDedupe();
+  ensureRecipeOrder();
   loadError = '';
   if (storageMode !== 'memory') saveError = '';
   commit();
@@ -788,6 +873,30 @@ export async function flush() {
 }
 
 /* ---------- Internals ---------- */
+
+/** Fills in stable per-category positions for recipes saved before ordering. */
+function ensureRecipeOrder() {
+  const groups = new Map();
+
+  for (const recipe of state.recipes) {
+    if (recipe.deletedAt || !recipe.title) continue;
+    if (!groups.has(recipe.category)) groups.set(recipe.category, []);
+    groups.get(recipe.category).push(recipe);
+  }
+
+  let changed = false;
+  for (const group of groups.values()) {
+    const ordered = [...group].sort(compareRecipePosition);
+    ordered.forEach((recipe, index) => {
+      if (recipe.position !== index) {
+        recipe.position = index;
+        changed = true;
+      }
+    });
+  }
+
+  if (changed) state.updatedAt = nowIso();
+}
 
 function ensureRecipeSeed() {
   const currentVersion = Number(state.settings.recipeSeedVersion) || 0;

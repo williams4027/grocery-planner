@@ -2,6 +2,7 @@
 
 import { PLAN_SLOTS, PLAN_SLOT_LABELS } from '../config.js';
 import * as store from '../store.js';
+import { buildPlanIcs } from '../calendar.js';
 import {
   addDays,
   fromDateKey,
@@ -104,8 +105,10 @@ export function mount(root) {
 
       <div class="plan-week__footer">
         <button class="btn" id="plan-copy" type="button">Copy last week</button>
+        <button class="btn" id="plan-ics" type="button">Download .ics</button>
         <p class="card__note">
           Copies into empty slots only. Custom meals stay on the plan and do not add ingredients.
+          The .ics file contains this week’s meals for Apple or Google Calendar.
         </p>
       </div>
     </section>
@@ -135,6 +138,7 @@ export function mount(root) {
     targetNote: root.querySelector('#plan-target-note'),
     week: root.querySelector('#plan-week'),
     copy: root.querySelector('#plan-copy'),
+    ics: root.querySelector('#plan-ics'),
     dialog: root.querySelector('#plan-dialog'),
     dialogTitle: root.querySelector('#plan-dialog-title'),
     dialogContext: root.querySelector('#plan-dialog-context'),
@@ -207,6 +211,7 @@ export function mount(root) {
     refs.count.textContent = entries.length
       ? `${countLabel(entries.length, 'meal')} planned`
       : 'Nothing planned this week';
+    refs.ics.disabled = !entries.length;
 
     const fragment = document.createDocumentFragment();
 
@@ -860,6 +865,29 @@ export function mount(root) {
   });
 
   refs.copy.addEventListener('click', copyLastWeek);
+
+  refs.ics.addEventListener('click', () => {
+    const entries = weekEntries();
+    if (!entries.length) return;
+
+    const recipeIds = [...new Set(entries.map((entry) => entry.recipeId).filter(Boolean))];
+    const recipes = recipeIds.map((recipeId) => store.getRecipe(recipeId)).filter(Boolean);
+    const payload = buildPlanIcs({
+      entries,
+      recipes,
+      calendarName: `Grocery Planner — week of ${toDateKey(anchor)}`,
+    });
+    const blob = new Blob([payload], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `grocery-planner-meal-plan-${toDateKey(anchor)}.ics`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    showToast(`Exported ${countLabel(entries.length, 'meal')}.`);
+  });
 
   refs.week.addEventListener('click', (event) => {
     const button = event.target.closest('button[data-action]');

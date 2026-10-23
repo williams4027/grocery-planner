@@ -1571,6 +1571,14 @@ export function mount(root) {
 }
 
 function compareItems(a, b) {
+  // Picked items still sink within their aisle; the rest read A–Z.
   if (a.checked !== b.checked) return a.checked ? 1 : -1;
+
+  const byName = String(a.name).localeCompare(String(b.name), undefined, {
+    sensitivity: 'base',
+    numeric: true,
+  });
+  if (byName) return byName;
+
   return String(a.addedAt).localeCompare(String(b.addedAt));
 }

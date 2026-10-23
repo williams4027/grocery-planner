@@ -130,7 +130,8 @@ export function mount(root) {
         <p id="backup-status" class="sheet__status" role="status" aria-live="polite"></p>
         <p class="card__note">
           Downloads an unencrypted JSON file with every list, item, recipe, planned meal, and
-          setting. Restoring replaces all data on this device.
+          setting. Restoring replaces all data on this device. For two phones, keep the newest
+          backup in a shared Google Drive folder and restore that file on the other phone.
         </p>
       </section>
 
@@ -202,7 +203,10 @@ export function mount(root) {
           <li class="is-done"><span class="roadmap__dot"></span>Bulk move, delete, and clear-list actions</li>
           <li class="is-done"><span class="roadmap__dot"></span>Install prompt and backup sharing</li>
           <li class="is-done"><span class="roadmap__dot"></span>Keep-awake shopping option</li>
-          <li class="is-current"><span class="roadmap__dot"></span>Phase 5 — merge between two phones</li>
+          <li class="is-done"><span class="roadmap__dot"></span>Alphabetical sorting within aisles</li>
+          <li class="is-done"><span class="roadmap__dot"></span>Recipe ordering, duplication, and .ics export</li>
+          <li class="is-done"><span class="roadmap__dot"></span>Shared Drive backup handoff</li>
+          <li class="is-current"><span class="roadmap__dot"></span>Optional — buy-again suggestions and encrypted export</li>
         </ul>
       </section>
 

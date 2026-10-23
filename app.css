@@ -2058,13 +2058,49 @@ body.sheet-open {
   height: 46px;
 }
 
+.recipe-order {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 14px;
+}
+
+.recipe-order__label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.recipe-order__btn {
+  flex: 1 1 120px;
+  min-height: 44px;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.recipe-order__btn svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .recipe-actions {
   display: grid;
   gap: 8px;
 }
 
 .recipe-add,
-.recipe-edit {
+.recipe-edit,
+.recipe-duplicate {
   width: 100%;
   min-height: 46px;
 }

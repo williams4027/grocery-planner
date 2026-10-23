@@ -250,6 +250,11 @@ export function normalizeServings(value) {
   return Math.max(1, Math.round(number));
 }
 
+function normalizeRecipePosition(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
 function normalizeSteps(value) {
   if (!Array.isArray(value)) return [];
   return value
@@ -266,6 +271,7 @@ export function createRecipe({
   notes = '',
   sourceUrl = null,
   seedKey = null,
+  position = null,
 } = {}) {
   const timestamp = nowIso();
 
@@ -284,6 +290,7 @@ export function createRecipe({
     notes: String(notes || '').trim(),
     sourceUrl: typeof sourceUrl === 'string' && sourceUrl ? sourceUrl : null,
     seedKey: typeof seedKey === 'string' && seedKey ? seedKey : null,
+    position: normalizeRecipePosition(position),
     createdAt: timestamp,
     updatedAt: timestamp,
     deletedAt: null,
@@ -476,6 +483,7 @@ function normalizeRecipe(input) {
     notes: String(input.notes || '').trim(),
     sourceUrl: typeof input.sourceUrl === 'string' && input.sourceUrl ? input.sourceUrl : null,
     seedKey: typeof input.seedKey === 'string' && input.seedKey ? input.seedKey : null,
+    position: normalizeRecipePosition(input.position),
     createdAt,
     updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : createdAt,
     deletedAt: typeof input.deletedAt === 'string' ? input.deletedAt : null,

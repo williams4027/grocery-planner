@@ -1,7 +1,7 @@
 # Grocery Planner — Project Plan
 
-A local-first PWA for weekly meal planning and grocery shopping, shared between two phones by
-exporting/importing a JSON file. Hosted free on GitHub Pages.
+A local-first PWA for weekly meal planning and grocery shopping, moved between phones by
+backing up to a shared Google Drive folder. Hosted free on GitHub Pages.
 
 - **Live URL:** `https://cheers-studios.com/grocery-planner/` (custom domain; the
   `williams4027.github.io` URL redirects here).
@@ -9,9 +9,11 @@ exporting/importing a JSON file. Hosted free on GitHub Pages.
 - **Storage:** IndexedDB (single state document) with localStorage fallback
 - **Sync:** manual export/import only (no server, no accounts, no network calls)
 
-**Status:** Phases 0–4 implemented, plus per-store lists, Google Calendar trip export, seeded
-recipes, item/recipe editing, JSON backup/restore, weekly meal planning, bulk list actions, and
-shopping/list-management polish. Phase 6 is complete. Two-phone merge is next.
+**Status:** Phases 0–6 implemented, plus per-store lists, Google Calendar trip export, recipe
+ordering/duplication, weekly meal planning, `.ics` calendar export, JSON backup/restore, bulk list
+actions, alphabetical aisle sorting, and shopping/list-management polish. Multi-device sharing is a
+manual backup/restore handoff through a shared Google Drive folder. There is no automatic merge or
+live sync.
 
 ---
 
@@ -75,9 +77,11 @@ Bottom tab bar for Plan / List / Recipes / More.
 - **Shop:** check items off one-handed; checked items sink to the bottom of their aisle; list
   survives app kill and offline reloads.
 - **Share:** export produces `grocery-planner-backup-YYYY-MM-DD.json`; use the system share sheet
-  when available, copy the JSON to the clipboard, or send the downloaded file via AirDrop/iMessage/
-  Files. Import validates and replaces after confirmation; merge is Phase 5.
-- **Backup nudge:** if no export in N days, show a dismissible banner on the list screen.
+  when available, copy the JSON to the clipboard, or save the downloaded file into a shared Google
+  Drive folder. On the other phone, **Restore from file** validates the backup and replaces local
+  data after confirmation. The shared folder is the multi-device handoff; there is no merge.
+- **Backup reminder:** More shows the last backup time. A dismissible nudge is still an optional
+  backlog idea.
 
 ### Data model sketch
 ```json
@@ -85,13 +89,13 @@ Bottom tab bar for Plan / List / Recipes / More.
   "format": "grocery-planner-backup",
   "formatVersion": 1,
   "schemaVersion": 1,
-  "appVersion": "0.9.3",
+  "appVersion": "0.9.4",
   "exportedAt": "2026-10-22T15:00:00.000Z",
   "state": {
     "recipes": [{
       "id": "rcp_1", "title": "Sheet-pan chicken", "servings": 4,
       "ingredients": [{ "name": "chicken thighs", "qty": 2, "unit": "lb", "aisle": "Meat & Seafood" }],
-      "steps": ["..."], "tags": ["weeknight"], "sourceUrl": null,
+      "steps": ["..."], "tags": ["weeknight"], "sourceUrl": null, "position": 0,
       "createdAt": "...", "updatedAt": "...", "deletedAt": null
     }],
     "plan": [{
@@ -122,14 +126,17 @@ Bottom tab bar for Plan / List / Recipes / More.
 }
 ```
 
-**Merge rule:** union by `id`; for the same `id`, keep the record with the newer `updatedAt`
-(last-write-wins). Deletes are tombstones (`deletedAt` set), not removals, so a deleted item does
-not resurrect from the other phone's copy. Tombstones are pruned after ~90 days on export.
+**Sharing rule:** backup and restore replaces the whole local state. Keep one latest backup in a
+shared Google Drive folder; export on the phone with the newest edits, then restore that file on
+the other phone. Do not edit both phones independently and expect changes to combine. Deletes are
+soft (`deletedAt`) locally, but import does not merge or prune them.
 **Schema version:** refused if newer than the app understands; migrated forward if older.
 
 ### Deliberate simplifications
-- Quantity is a number + free-text unit. Merging sums only when name and unit match exactly.
+- Quantity is a number + free-text unit. Adding the same item to a list combines quantities only
+  when name and unit match exactly.
 - Aisle assignment is a small keyword map plus manual override; unmatched → "Other".
+- Recipe order is a per-category `position`; duplicates are inserted directly after the original.
 - One active shopping list at a time. Store lists are independent, each with its own aisle order.
 - No user auth. Anyone with the file has the data — treat exports like a photo, not a secret doc.
 
@@ -168,7 +175,7 @@ Everything else (Node 14, npm, Safari) is fine for this stack, since there is no
 │   ├── config.js           # name, version, schema version, aisles, store presets, storage keys
 │   ├── model.js            # factories, aisle keywords, normalization
 │   ├── dates.js            # local date keys, week starts, day arithmetic
-│   ├── calendar.js         # Google Calendar trip details + URL builder (pure)
+│   ├── calendar.js         # Google Calendar details, URL builder, and .ics export (pure)
 │   ├── backup.js           # JSON backup format, validation, restore
 │   ├── store.js            # state container, IndexedDB persistence, subscribe()
 │   ├── seed-recipes.js     # recipes imported from the meal-planning sheet
@@ -266,29 +273,46 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 - **Accept:** select two rows, move them to another list, combine a matching quantity, clear the
   source list, and undo both actions. Done.
 
-### Phase 3 — Recipes (done, v0.5.1; reorder and scaling queued)
+### Phase 2.7 — Alphabetical list sorting (done, v0.9.4)
+- Items stay grouped in store-aisle order, but each aisle now sorts A–Z by item name. Matching is
+  case-insensitive and uses natural number ordering.
+- Picked items still sink to the bottom of their aisle and are also sorted A–Z there.
+- **Accept:** add eggs, milk, and flour to the same aisle and see eggs, flour, milk. Done.
+
+### Phase 3 — Recipes (done, v0.9.4)
 - Recipe list with search and category filters; create/edit form with a simple ingredient textarea.
 - Ingredient model: name, qty, unit, aisle (auto-suggested); leading quantities are parsed.
-- Recipe detail with edit and "add ingredients to list" (any visible list) without scaling.
+- Recipe detail with edit, duplicate, and "add ingredients to list" (any visible list).
+- Manual ordering inside each category with **Move up** / **Move down**; duplicates are named
+  “copy” and inserted directly after the original.
 - Twenty recipes seeded from the household meal-planning sheet, guarded by a seed marker.
-- Still queued: reorder/duplicate recipes and scale ingredients by servings.
-- **Accept:** edit a seeded recipe and add its ingredients to a chosen list offline.
+- Recipe-level serving scaling is intentionally deferred and may be removed for simplicity; the
+  meal plan still scales ingredients by planned servings.
+- **Accept:** edit a seeded recipe, reorder it, duplicate it, and add its ingredients to a chosen
+  list offline. Done.
 
-### Phase 4 — Weekly meal plan (done, v0.7.0)
+### Phase 4 — Weekly meal plan (done, v0.7.0; .ics export added v0.9.4)
 - Week view: 7 days × 3 slots, prev/next week, "today" jump; assign recipe or free text.
 - Servings per entry; copy last week into empty slots; clear day.
 - Choosing a recipe automatically adds scaled ingredients to the selected list with
   `sourceRecipeId` and per-meal quantity contributions. Updating or clearing a meal removes only
   that meal's unchecked share; checked items are kept.
+- **Download .ics:** export the visible week as all-day calendar events for Apple or Google
+  Calendar. The file is built locally; nothing is uploaded.
 - **Accept:** plan 5 dinners, see their ingredients on the chosen list, shop, check off; plan
-  persists offline. Done: plan entries and automatic additions survive reload.
+  persists offline. Export the week, import the `.ics` file, and see the meals on a calendar. Done.
 
-### Phase 5 — Two-phone merge (1–2 days)
-- Merge import (union by id, last-write-wins, tombstones), preview counts (new/updated/deleted).
-- `deviceId` + `lastModifiedBy` surfaced subtly ("updated on Blake's phone").
-- Backup nudge banner after `backupNudgeDays`; tombstone pruning.
-- **Accept:** both phones edit different items → merge keeps both. Delete on A, edit on B → no
-  zombie resurrection. Round-trip A → B → A is stable (idempotent).
+### Phase 5 — Shared-folder backup handoff (done, v0.9.4)
+- Supported multi-device workflow: keep the latest `grocery-planner-backup-YYYY-MM-DD.json` in a
+  shared Google Drive folder (or any shared file location).
+- Export on the phone with the newest edits, then **Restore from file** on the other phone. Import
+  validates first and replaces all local data after confirmation.
+- No device IDs, automatic merge, last-write-wins, tombstones, or background sync. Coordinate edits
+  instead of editing both phones at the same time.
+- Backup nudge and tombstone pruning remain optional backlog ideas; last-backup time is visible in
+  More.
+- **Accept:** export on phone A, save to the shared folder, restore that file on phone B, and see
+  the same lists, recipes, and plan. Done.
 
 ### Phase 6 — Polish pass (done, v0.9.3)
 - Install help page per platform (iOS Share → Add to Home Screen; Android/desktop install button).
@@ -303,7 +327,7 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 - **Accept:** Lighthouse PWA/installability passes; VoiceOver reads list items and check state.
 
 ### Phase 7 — Optional extras (backlog)
-- ICS export of the meal plan (import to Apple/Google Calendar).
+- Backup nudge banner after `backupNudgeDays`.
 - Staples / "buy again" suggestions from checked history.
 - `404.html` redirect shim if we ever want path routing instead of hash routes.
 - Custom domain via `CNAME`.
@@ -343,7 +367,7 @@ blocked by the Xcode license, so the project ships its own tiny Node server.)
 | Photos/notes lost after phone change | Export reminder + "last backup" in Settings; import test in Phase 2. |
 | Service worker serves stale app | Cache versioning, update toast, short cache TTL for `js/`. |
 | Subpath breaks assets on Pages | All URLs relative (`./js/app.js`), no leading slashes, hash routing. |
-| Two-phone merge creates duplicates | Stable IDs, normalized name+unit keys, merge preview before commit. |
+| Two phones overwrite each other | One shared-folder handoff at a time; export before switching phones and keep the latest file. |
 | Safari quirks in standalone mode | Test on-device every phase; avoid `navigator.share` as the only export path. |
 | Scope creep (prices, nutrition, sync) | Explicit non-goals; Phase 7 backlog. |
 

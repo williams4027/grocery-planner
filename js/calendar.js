@@ -1,6 +1,7 @@
 /* Google Calendar handoff — pure builders, no DOM, no network. */
 
-import { AISLES } from './config.js';
+import { AISLES, PLAN_SLOTS, PLAN_SLOT_LABELS } from './config.js';
+import { addDays, fromDateKey, isValidDateKey, toDateKey } from './dates.js';
 
 function pad(value) {
   return String(value).padStart(2, '0');
@@ -129,4 +130,104 @@ export function buildGoogleCalendarUrl({
   params.set('ctz', timeZone || browserTimeZone());
 
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+function compactDate(dateKey) {
+  return isValidDateKey(dateKey) ? dateKey.replace(/-/g, '') : '';
+}
+
+function utcStamp(value) {
+  const date = value instanceof Date && !Number.isNaN(value.getTime()) ? value : new Date();
+  return `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(
+    date.getUTCDate()
+  )}T${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())}Z`;
+}
+
+function escapeIcsText(value) {
+  return String(value || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/\r?\n/g, '\\n')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,');
+}
+
+function foldIcsLine(line) {
+  if (line.length <= 75) return line;
+
+  let result = '';
+  let rest = line;
+  while (rest.length > 75) {
+    result += `${rest.slice(0, 75)}\r\n `;
+    rest = rest.slice(75);
+  }
+  return result + rest;
+}
+
+/** All-day calendar events for planned meals, suitable for Apple/Google Calendar. */
+export function buildPlanIcs({
+  entries = [],
+  recipes = [],
+  calendarName = 'Grocery Planner meal plan',
+  now = new Date(),
+} = {}) {
+  const recipeMap = new Map(
+    (Array.isArray(recipes) ? recipes : [])
+      .filter((recipe) => recipe && recipe.id)
+      .map((recipe) => [recipe.id, recipe])
+  );
+  const slotOrder = new Map(PLAN_SLOTS.map((slot, index) => [slot, index]));
+  const ordered = (Array.isArray(entries) ? entries : [])
+    .filter((entry) => entry && isValidDateKey(entry.date) && PLAN_SLOT_LABELS[entry.slot])
+    .sort(
+      (a, b) =>
+        a.date.localeCompare(b.date) ||
+        (slotOrder.get(a.slot) ?? 99) - (slotOrder.get(b.slot) ?? 99)
+    );
+  const stamp = utcStamp(now);
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Grocery Planner//Meal Plan//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    `X-WR-CALNAME:${escapeIcsText(calendarName)}`,
+  ];
+
+  for (const entry of ordered) {
+    const start = compactDate(entry.date);
+    const endDate = fromDateKey(entry.date);
+    const end = endDate ? compactDate(toDateKey(addDays(endDate, 1))) : '';
+    if (!start || !end) continue;
+
+    const recipe = entry.recipeId ? recipeMap.get(entry.recipeId) : null;
+    const slotLabel = PLAN_SLOT_LABELS[entry.slot];
+    const title = recipe?.title || entry.title || 'Planned meal';
+    const description = [
+      `Meal: ${slotLabel}`,
+      recipe ? `Recipe: ${recipe.title}` : 'Custom meal',
+      recipe?.category ? `Category: ${recipe.category}` : null,
+      Number.isFinite(entry.servings) ? `Servings: ${entry.servings}` : null,
+      recipe?.ingredients?.length
+        ? `Ingredients: ${recipe.ingredients.map((ingredient) => ingredient.name).join(', ')}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    lines.push(
+      'BEGIN:VEVENT',
+      `UID:${escapeIcsText(entry.id || `${entry.date}-${entry.slot}`)}@grocery-planner.local`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART;VALUE=DATE:${start}`,
+      `DTEND;VALUE=DATE:${end}`,
+      `SUMMARY:${escapeIcsText(`${slotLabel}: ${title}`)}`,
+      `DESCRIPTION:${escapeIcsText(description)}`,
+      'CATEGORIES:Meal plan',
+      'TRANSP:TRANSPARENT',
+      'END:VEVENT'
+    );
+  }
+
+  lines.push('END:VCALENDAR');
+  return `${lines.map(foldIcsLine).join('\r\n')}\r\n`;
 }
