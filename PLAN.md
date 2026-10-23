@@ -11,9 +11,9 @@ backing up to a shared Google Drive folder. Hosted free on GitHub Pages.
 
 **Status:** Phases 0–6 implemented, plus per-store lists, Google Calendar trip export, recipe
 ordering/duplication, weekly meal planning, `.ics` calendar export, JSON backup/restore, bulk list
-actions, alphabetical aisle sorting, a Google Drive backup search shortcut, and
-shopping/list-management polish. Multi-device sharing is a manual backup/restore handoff through a
-shared Google Drive folder. There is no automatic merge or live sync.
+actions, alphabetical aisle sorting, a Google Drive backup search shortcut, factory reset to
+seeded data, and shopping/list-management polish. Multi-device sharing is a manual backup/restore
+handoff through a shared Google Drive folder. There is no automatic merge or live sync.
 
 ---
 
@@ -93,7 +93,7 @@ Bottom tab bar for Plan / List / Recipes / More.
   "format": "grocery-planner-backup",
   "formatVersion": 1,
   "schemaVersion": 1,
-  "appVersion": "0.9.6",
+  "appVersion": "0.9.7",
   "exportedAt": "2026-10-22T15:00:00.000Z",
   "state": {
     "recipes": [{
@@ -343,6 +343,16 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
   iPhone and Android when the Drive app is installed.
 - **Accept:** tap Search Google Drive, find the newest backup, download it, and restore it on the
   other phone without configuring Google Cloud. Done.
+
+### Phase 5.2 — Factory reset to seeded data (done, v0.9.7)
+- More adds a destructive **Reset to seeded data** action behind a confirmation sheet.
+- Confirming replaces the complete state with a first-install state: one fresh Groceries list, no
+  items or planned meals, default settings, and the current seeded recipe set.
+- The replacement is flushed to IndexedDB/localStorage before the UI reports success. A storage
+  failure is surfaced without claiming the data was saved.
+- Existing backup export remains the way to preserve data before resetting.
+- **Accept:** make edits, reset, and see exactly one Groceries list, zero items, zero planned meals,
+  and the seeded recipes; reload and confirm the reset persisted. Done.
 
 ### Phase 6 — Polish pass (done, v0.9.3)
 - Install help page per platform (iOS Share → Add to Home Screen; Android/desktop install button).

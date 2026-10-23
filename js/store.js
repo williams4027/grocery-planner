@@ -543,6 +543,24 @@ export function importBackup(input) {
   };
 }
 
+/**
+ * Clears every list, item, recipe, plan entry, and setting, then restores the
+ * same fresh state a first install receives (one Groceries list and the seeded
+ * recipes). Waits for the replacement to reach storage.
+ */
+export async function resetToSeedData() {
+  state = createEmptyState();
+  ensureRecipeSeed();
+  ensureListDedupe();
+  ensureRecipeOrder();
+  loadError = '';
+  if (storageMode !== 'memory') saveError = '';
+  commit();
+  await flush();
+
+  return { summary: summarizeState(state) };
+}
+
 export function subscribe(listener) {
   listeners.add(listener);
   return () => listeners.delete(listener);

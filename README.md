@@ -15,9 +15,10 @@ be installed from Safari on an iPhone.
 
 Status: **All core features are complete** — per-store lists, Google Calendar trip export, seeded
 recipes with ordering and duplication, backup and restore, weekly meal planning with `.ics` export,
-shopping/list-management polish, quantity merging, cross-list moves, and a Google Drive backup
-search shortcut. Multi-device sharing uses a shared Google Drive folder and manual restore; there
-is no automatic merge. See [PLAN.md](./PLAN.md) for the roadmap and optional backlog.
+shopping/list-management polish, quantity merging, cross-list moves, a Google Drive backup search
+shortcut, and factory reset to seeded data. Multi-device sharing uses a shared Google Drive folder
+and manual restore; there is no automatic merge. See [PLAN.md](./PLAN.md) for the roadmap and
+optional backlog.
 
 ## Quick start
 
@@ -169,6 +170,9 @@ PLAN.md                 product plan, data model, phase breakdown
 - **Use a shared Google Drive folder for two phones.** Keep the newest backup there. Export on the
   phone with the latest edits, then open that file with **Restore from file** on the other phone.
   Import replaces local data, so don’t edit both phones independently and expect a merge.
+- **Factory reset** in More asks for confirmation, then clears every local list, item, recipe,
+  planned meal, and setting and restores a fresh Groceries list plus the original seeded recipes.
+  Export a backup first if you may need the current data.
 - **Install app** appears in More when Chrome or Edge offers an install prompt. On iPhone and iPad,
   follow the Share → Add to Home Screen steps in the same card.
 - More also has an optional **Keep the screen awake in List** switch. It uses the Screen Wake Lock

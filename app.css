@@ -1495,6 +1495,10 @@ body.sheet-open {
   flex: 1 1 100%;
 }
 
+.reset-btn {
+  flex: 1 1 180px;
+}
+
 /* ---------- Store lists + calendar handoff ---------- */
 
 .page-head__actions {

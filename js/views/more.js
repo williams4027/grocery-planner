@@ -51,6 +51,7 @@ const DRIVE_SEARCH_URL =
 export function mount(root) {
   let active = true;
   let restoreSheet = null;
+  let resetSheet = null;
   let pendingImport = null;
   let unsubInstall = null;
 
@@ -58,6 +59,10 @@ export function mount(root) {
     if (restoreSheet) {
       restoreSheet.destroy();
       restoreSheet = null;
+    }
+    if (resetSheet) {
+      resetSheet.destroy();
+      resetSheet = null;
     }
     if (unsubInstall) {
       unsubInstall();
@@ -148,6 +153,23 @@ export function mount(root) {
         </p>
       </section>
 
+      <section class="card" aria-labelledby="reset-card-title">
+        <div class="card__head">
+          <h2 id="reset-card-title">Factory reset</h2>
+          <span class="badge">Destructive</span>
+        </div>
+        <p class="card__note" style="margin-top: 0">
+          Clears every list, item, recipe, planned meal, and setting on this device, then restores
+          a fresh Groceries list and the original seeded recipes. Export a backup first if you may
+          need this data.
+        </p>
+        <div class="btn-row">
+          <button class="btn btn--danger reset-btn" id="reset-btn" type="button">
+            Reset to seeded data
+          </button>
+        </div>
+      </section>
+
       <section class="card" aria-labelledby="install-title">
         <div class="card__head">
           <h2 id="install-title">Install on your phone</h2>
@@ -221,6 +243,7 @@ export function mount(root) {
           <li class="is-done"><span class="roadmap__dot"></span>Shared Drive backup handoff</li>
           <li class="is-done"><span class="roadmap__dot"></span>Manual aisle overrides and per-list aisle order</li>
           <li class="is-done"><span class="roadmap__dot"></span>Google Drive backup search shortcut</li>
+          <li class="is-done"><span class="roadmap__dot"></span>Factory reset to seeded data</li>
           <li class="is-current"><span class="roadmap__dot"></span>Optional — buy-again suggestions and encrypted export</li>
         </ul>
       </section>
@@ -247,6 +270,30 @@ export function mount(root) {
           </button>
         </div>
       </dialog>
+
+      <dialog id="reset-dialog" class="sheet" aria-labelledby="reset-dialog-title">
+        <div class="sheet__handle" aria-hidden="true"></div>
+        <div class="sheet__head">
+          <h2 id="reset-dialog-title">Reset everything?</h2>
+          <button class="sheet__close" id="reset-close" type="button" aria-label="Close">
+            ${ICONS.close}
+          </button>
+        </div>
+        <p class="restore-warning">
+          This deletes every list, item, recipe, planned meal, and setting on this device. Then it
+          restores a fresh Groceries list and the original seeded recipes. This cannot be undone.
+        </p>
+        <p class="backup-summary">
+          Export a backup first if you may need your current data.
+        </p>
+        <p id="reset-dialog-status" class="sheet__status" role="status" aria-live="polite"></p>
+        <div class="btn-row backup-actions">
+          <button class="btn" id="reset-cancel" type="button">Cancel</button>
+          <button class="btn btn--danger" id="reset-confirm" type="button">
+            Reset everything
+          </button>
+        </div>
+      </dialog>
     `;
 
     bind();
@@ -262,6 +309,9 @@ export function mount(root) {
     const status = root.querySelector('#backup-status');
     const restoreDialog = root.querySelector('#restore-dialog');
     const restoreStatus = root.querySelector('#restore-status');
+    const resetButton = root.querySelector('#reset-btn');
+    const resetDialog = root.querySelector('#reset-dialog');
+    const resetDialogStatus = root.querySelector('#reset-dialog-status');
     const installActions = root.querySelector('#install-actions');
     const installButton = root.querySelector('#install-app');
     const installStatus = root.querySelector('#install-status');
@@ -327,6 +377,14 @@ export function mount(root) {
       initialFocus: () => root.querySelector('#restore-cancel'),
       onClose: () => {
         pendingImport = null;
+      },
+    });
+
+    resetSheet = createSheetController(resetDialog, {
+      trigger: resetButton,
+      initialFocus: () => root.querySelector('#reset-cancel'),
+      onClose: () => {
+        resetDialogStatus.textContent = '';
       },
     });
 
@@ -490,6 +548,36 @@ export function mount(root) {
         restoreStatus.textContent = error.message || 'Could not restore that backup.';
       }
     });
+
+    resetButton.addEventListener('click', () => {
+      resetDialogStatus.textContent = '';
+      resetSheet.open();
+    });
+
+    root.querySelector('#reset-close').addEventListener('click', () => resetSheet.close());
+    root.querySelector('#reset-cancel').addEventListener('click', () => resetSheet.close());
+
+    root.querySelector('#reset-confirm').addEventListener('click', async () => {
+      const confirmButton = root.querySelector('#reset-confirm');
+      confirmButton.disabled = true;
+      resetDialogStatus.textContent = 'Resetting…';
+
+      try {
+        await store.resetToSeedData();
+        const storage = store.getStorageInfo();
+        resetSheet.close();
+        render();
+        showToast(
+          storage.error
+            ? 'Data reset in this tab, but it could not be saved.'
+            : 'App reset. Seeded recipes restored.'
+        );
+      } catch (error) {
+        console.error('Factory reset failed', error);
+        resetDialogStatus.textContent = error.message || 'Could not reset the app.';
+        confirmButton.disabled = false;
+      }
+    });
   }
 
   render();
@@ -503,6 +591,10 @@ export function mount(root) {
     if (restoreSheet) {
       restoreSheet.destroy();
       restoreSheet = null;
+    }
+    if (resetSheet) {
+      resetSheet.destroy();
+      resetSheet = null;
     }
   };
 }
