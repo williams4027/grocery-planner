@@ -1,16 +1,18 @@
 /* Shared constants */
 
 export const APP_NAME = 'Grocery Planner';
-export const VERSION = '0.9.4';
+export const VERSION = '0.9.5';
 export const SCHEMA_VERSION = 1;
 
+/* Default route through a store; each list can reorder its own copy. */
 export const AISLES = [
   'Produce',
+  'Deli',
   'Meat & Seafood',
   'Dairy',
-  'Bakery',
-  'Frozen',
   'Pantry',
+  'Frozen',
+  'Bakery',
   'Household',
   'Other',
 ];
@@ -32,11 +34,12 @@ export const STORE_PRESETS = {
     name: 'Kroger',
     aisleOrder: [
       'Produce',
+      'Deli',
       'Meat & Seafood',
       'Dairy',
       'Bakery',
-      'Frozen',
       'Pantry',
+      'Frozen',
       'Household',
       'Other',
     ],
@@ -47,10 +50,11 @@ export const STORE_PRESETS = {
     aisleOrder: [
       'Produce',
       'Bakery',
+      'Deli',
       'Meat & Seafood',
       'Dairy',
-      'Frozen',
       'Pantry',
+      'Frozen',
       'Household',
       'Other',
     ],
@@ -63,6 +67,7 @@ export const STORE_PRESETS = {
       'Pantry',
       'Frozen',
       'Dairy',
+      'Deli',
       'Meat & Seafood',
       'Produce',
       'Bakery',

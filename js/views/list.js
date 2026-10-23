@@ -1,6 +1,7 @@
 /* Grocery list view — per-store lists, aisle order, calendar handoff. */
 
-import { STORE_PRESETS } from '../config.js';
+import { AISLES, STORE_PRESETS } from '../config.js';
+import { suggestAisle } from '../model.js';
 import * as store from '../store.js';
 import { buildGoogleCalendarUrl } from '../calendar.js';
 import { createSheetController } from '../sheet.js';
@@ -11,6 +12,7 @@ const PRESET_ORDER = ['kroger', 'wholefoods', 'costco', 'custom'];
 export function mount(root) {
   let renaming = false;
   let selectedPreset = 'custom';
+  let selectedAisleListId = null;
   let lastActiveChipId = null;
   let editingItemId = null;
   let lastItemTrigger = null;
@@ -137,8 +139,8 @@ export function mount(root) {
       </div>
 
       <form id="add-form" class="add" autocomplete="off">
-        <div class="add__main">
-          <label class="sr-only" for="add-name">Item name</label>
+        <label class="field field--stacked">
+          <span class="field__label">Item name</span>
           <input
             id="add-name"
             class="add__name"
@@ -151,10 +153,9 @@ export function mount(root) {
             autofocus
             required
           />
-          <button id="add-submit" class="btn btn--primary add__submit" type="submit">Add</button>
-        </div>
+        </label>
         <div class="add__details">
-          <label class="field">
+          <label class="field field--stacked">
             <span class="field__label">Qty</span>
             <input
               id="add-qty"
@@ -167,7 +168,7 @@ export function mount(root) {
               placeholder="2"
             />
           </label>
-          <label class="field">
+          <label class="field field--stacked">
             <span class="field__label">Description</span>
             <input
               id="add-unit"
@@ -178,11 +179,16 @@ export function mount(root) {
               placeholder="organic, green, 2 lb bag…"
             />
           </label>
+          <label class="field field--stacked add__aisle-field">
+            <span class="field__label">Aisle</span>
+            <select id="add-aisle" class="field__input" name="aisle"></select>
+          </label>
         </div>
         <label class="field field--stacked" id="add-list-field" hidden>
           <span class="field__label" id="add-list-label">Add to</span>
           <select id="add-list" class="field__input" name="list"></select>
         </label>
+        <button id="add-submit" class="btn btn--primary add__submit" type="submit">Add</button>
       </form>
 
       <p id="sheet-status" class="sheet__status" role="status" aria-live="polite"></p>
@@ -241,6 +247,29 @@ export function mount(root) {
       </p>
       <div id="manage-lists-body"></div>
       <p id="manage-lists-status" class="sheet__status" role="status" aria-live="polite"></p>
+    </dialog>
+
+    <dialog
+      id="aisle-order-dialog"
+      class="sheet aisle-order-sheet"
+      aria-labelledby="aisle-order-title"
+    >
+      <div class="sheet__handle" aria-hidden="true"></div>
+      <div class="sheet__head">
+        <h2 id="aisle-order-title">Aisle order</h2>
+        <button class="sheet__close" id="aisle-order-close" type="button" aria-label="Close">
+          ${ICONS.close}
+        </button>
+      </div>
+      <p class="card__note aisle-order-intro">
+        Put aisles in the order you walk through this store. The list groups items in this order;
+        changes save immediately.
+      </p>
+      <ul id="aisle-order-list" class="aisle-order-list"></ul>
+      <button id="aisle-order-reset" class="btn aisle-order-reset" type="button">
+        Reset to store order
+      </button>
+      <p id="aisle-order-status" class="sheet__status" role="status" aria-live="polite"></p>
     </dialog>
 
     <dialog id="move-dialog" class="sheet" aria-labelledby="move-title">
@@ -333,6 +362,7 @@ export function mount(root) {
     nameInput: root.querySelector('#add-name'),
     qtyInput: root.querySelector('#add-qty'),
     unitInput: root.querySelector('#add-unit'),
+    aisleSelect: root.querySelector('#add-aisle'),
     listField: root.querySelector('#add-list-field'),
     listLabel: root.querySelector('#add-list-label'),
     listSelect: root.querySelector('#add-list'),
@@ -348,6 +378,12 @@ export function mount(root) {
     manageClose: root.querySelector('#manage-lists-close'),
     manageBody: root.querySelector('#manage-lists-body'),
     manageStatus: root.querySelector('#manage-lists-status'),
+    aisleOrderDialog: root.querySelector('#aisle-order-dialog'),
+    aisleOrderTitle: root.querySelector('#aisle-order-title'),
+    aisleOrderList: root.querySelector('#aisle-order-list'),
+    aisleOrderReset: root.querySelector('#aisle-order-reset'),
+    aisleOrderClose: root.querySelector('#aisle-order-close'),
+    aisleOrderStatus: root.querySelector('#aisle-order-status'),
     moveDialog: root.querySelector('#move-dialog'),
     moveClose: root.querySelector('#move-close'),
     moveForm: root.querySelector('#move-form'),
@@ -402,6 +438,7 @@ export function mount(root) {
     renderItems(list);
     applySelectionMode();
     if (refs.manageDialog.open) renderManageLists();
+    if (refs.aisleOrderDialog.open) renderAisleOrder();
   }
 
   function endSelection() {
@@ -532,6 +569,20 @@ export function mount(root) {
     refs.listLabel.textContent = editingItemId ? 'Move to' : 'Add to';
     refs.listField.hidden = lists.length < 2;
     updateSubmitLabel();
+  }
+
+  function renderAisleOptions(selected = '') {
+    const suggestion = suggestAisle(refs.nameInput.value);
+    refs.aisleSelect.replaceChildren(
+      h('option', { value: '' }, `Auto — ${suggestion}`),
+      ...AISLES.map((aisle) => h('option', { value: aisle }, aisle))
+    );
+    refs.aisleSelect.value = AISLES.includes(selected) ? selected : '';
+  }
+
+  function updateAisleSuggestion() {
+    const autoOption = refs.aisleSelect.querySelector('option[value=""]');
+    if (autoOption) autoOption.textContent = `Auto — ${suggestAisle(refs.nameInput.value)}`;
   }
 
   function updateSubmitLabel() {
@@ -781,6 +832,15 @@ export function mount(root) {
                   {
                     class: 'btn manage-btn',
                     type: 'button',
+                    dataset: { action: 'aisles', listId: list.id },
+                  },
+                  'Aisles'
+                ),
+                h(
+                  'button',
+                  {
+                    class: 'btn manage-btn',
+                    type: 'button',
                     dataset: { action: 'duplicate', listId: list.id },
                   },
                   'Duplicate'
@@ -849,6 +909,74 @@ export function mount(root) {
     }
 
     refs.manageBody.replaceChildren(...nodes);
+  }
+
+  function aisleOrderFor(list) {
+    return Array.isArray(list.aisleOrder) && list.aisleOrder.length
+      ? [...list.aisleOrder]
+      : [...AISLES];
+  }
+
+  function renderAisleOrder() {
+    const list = store
+      .getState()
+      .lists.find((entry) => entry.id === selectedAisleListId && !entry.archivedAt);
+    if (!list) {
+      aisleOrderSheet.close();
+      return;
+    }
+
+    const order = aisleOrderFor(list);
+    const preset = STORE_PRESETS[list.storeKey] || STORE_PRESETS.custom;
+    const presetOrder = preset.aisleOrder;
+    const atPreset =
+      order.length === presetOrder.length &&
+      order.every((aisle, index) => aisle === presetOrder[index]);
+
+    refs.aisleOrderTitle.textContent = `Aisle order · ${list.name}`;
+    refs.aisleOrderStatus.textContent = '';
+    refs.aisleOrderReset.textContent =
+      preset === STORE_PRESETS.custom ? 'Reset to default order' : `Reset to ${preset.label} order`;
+    refs.aisleOrderReset.disabled = atPreset;
+
+    refs.aisleOrderList.replaceChildren(
+      ...order.map((aisle, index) =>
+        h(
+          'li',
+          { class: 'aisle-order-row', dataset: { aisle } },
+          h('span', { class: 'aisle-order-row__index', 'aria-hidden': 'true' }, String(index + 1)),
+          h('span', { class: 'aisle-order-row__name' }, aisle),
+          h(
+            'div',
+            { class: 'aisle-order-row__actions' },
+            h(
+              'button',
+              {
+                class: 'icon-btn aisle-order-btn',
+                type: 'button',
+                dataset: { aisle, direction: 'up' },
+                disabled: index === 0,
+                'aria-label': `Move ${aisle} up`,
+                title: `Move ${aisle} up`,
+              },
+              icon('arrowUp')
+            ),
+            h(
+              'button',
+              {
+                class: 'icon-btn aisle-order-btn',
+                type: 'button',
+                dataset: { aisle, direction: 'down' },
+                disabled: index === order.length - 1,
+                'aria-label': `Move ${aisle} down`,
+                title: `Move ${aisle} down`,
+              },
+              icon('arrowDown')
+            )
+          )
+        )
+      )
+    );
   }
 
   function itemNode(item) {
@@ -931,16 +1059,18 @@ export function mount(root) {
         refs.nameInput.value = item.name;
         refs.qtyInput.value = item.qty == null ? '' : String(item.qty);
         refs.unitInput.value = item.unit || '';
+        renderAisleOptions(item.aisle === suggestAisle(item.name) ? '' : item.aisle);
         renderAddListOptions({ forceActive: true });
         return;
       }
 
       editingItemId = null;
-      refs.form.reset();
     }
 
+    refs.form.reset();
     refs.sheetTitle.textContent = 'Add item';
     refs.submitButton.textContent = 'Add';
+    renderAisleOptions();
     renderAddListOptions({ forceActive: true });
   }
 
@@ -1036,6 +1166,22 @@ export function mount(root) {
     },
   });
 
+  const aisleOrderSheet = createSheetController(refs.aisleOrderDialog, {
+    trigger: () => refs.manageChip,
+    initialFocus: () =>
+      refs.aisleOrderList.querySelector('button:not([disabled])') || refs.aisleOrderClose,
+    onOpen: renderAisleOrder,
+    onClose: () => {
+      refs.aisleOrderStatus.textContent = '';
+    },
+  });
+
+  function openAisleOrder(listId) {
+    selectedAisleListId = listId;
+    manageListsSheet.close();
+    setTimeout(() => aisleOrderSheet.open(), 0);
+  }
+
   const moveSheet = createSheetController(refs.moveDialog, {
     trigger: () => refs.selectButton,
     initialFocus: () => refs.moveOptions.querySelector('input') || refs.moveClose,
@@ -1063,6 +1209,7 @@ export function mount(root) {
   });
   refs.closeButton.addEventListener('click', () => addSheet.close());
   refs.listSelect.addEventListener('change', updateSubmitLabel);
+  refs.nameInput.addEventListener('input', updateAisleSuggestion);
 
   refs.form.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -1086,6 +1233,7 @@ export function mount(root) {
         name,
         qty: refs.qtyInput.value,
         unit: refs.unitInput.value,
+        aisle: refs.aisleSelect.value || null,
       });
 
       if (!item) {
@@ -1124,6 +1272,7 @@ export function mount(root) {
       name,
       qty: refs.qtyInput.value,
       unit: refs.unitInput.value,
+      aisle: refs.aisleSelect.value || null,
     });
 
     if (!item) {
@@ -1136,8 +1285,9 @@ export function mount(root) {
     }
 
     refs.form.reset();
+    renderAisleOptions();
     renderAddListOptions({ forceActive: true });
-    refs.status.textContent = `Added ${item.name} to ${target.name}.`;
+    refs.status.textContent = `Added ${item.name} to ${target.name} in ${item.aisle}.`;
     refs.nameInput.focus({ preventScroll: true });
   });
 
@@ -1384,6 +1534,11 @@ export function mount(root) {
     const listId = button.dataset.listId;
     refs.manageStatus.textContent = '';
 
+    if (button.dataset.action === 'aisles') {
+      openAisleOrder(listId);
+      return;
+    }
+
     if (button.dataset.action === 'duplicate') {
       const copy = store.duplicateList(listId);
       if (!copy) {
@@ -1413,6 +1568,44 @@ export function mount(root) {
       }
       showToast(`${restored.name} restored.`);
     }
+  });
+
+  /* ---------- Aisle order ---------- */
+
+  refs.aisleOrderClose.addEventListener('click', () => aisleOrderSheet.close());
+
+  refs.aisleOrderList.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-direction]');
+    if (!button) return;
+
+    const list = store.getState().lists.find((entry) => entry.id === selectedAisleListId);
+    if (!list) return;
+
+    const order = aisleOrderFor(list);
+    const index = order.indexOf(button.dataset.aisle);
+    const targetIndex = index + (button.dataset.direction === 'up' ? -1 : 1);
+    if (index === -1 || targetIndex < 0 || targetIndex >= order.length) return;
+
+    [order[index], order[targetIndex]] = [order[targetIndex], order[index]];
+    if (!store.updateListAisleOrder(list.id, order)) return;
+
+    const movedRow = [...refs.aisleOrderList.querySelectorAll('.aisle-order-row')].find(
+      (row) => row.dataset.aisle === button.dataset.aisle
+    );
+    const nextButton = movedRow && movedRow.querySelector('button:not([disabled])');
+    if (nextButton) nextButton.focus({ preventScroll: true });
+  });
+
+  refs.aisleOrderReset.addEventListener('click', () => {
+    const list = store.getState().lists.find((entry) => entry.id === selectedAisleListId);
+    if (!list) return;
+
+    const preset = STORE_PRESETS[list.storeKey] || STORE_PRESETS.custom;
+    if (!store.updateListAisleOrder(list.id, preset.aisleOrder)) return;
+
+    const firstMove = refs.aisleOrderList.querySelector('button:not([disabled])');
+    if (firstMove) firstMove.focus({ preventScroll: true });
+    refs.aisleOrderStatus.textContent = 'Aisle order reset.';
   });
 
   /* ---------- Calendar sheet ---------- */
@@ -1551,6 +1744,7 @@ export function mount(root) {
     renderName(list);
   });
 
+  renderAisleOptions();
   const unsubscribe = store.subscribe(render);
   render();
   document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -1563,6 +1757,7 @@ export function mount(root) {
     addSheet.destroy();
     newListSheet.destroy();
     manageListsSheet.destroy();
+    aisleOrderSheet.destroy();
     moveSheet.destroy();
     calendarSheet.destroy();
     document.body.classList.remove('has-add-dock');

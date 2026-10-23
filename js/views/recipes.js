@@ -1,6 +1,7 @@
 /* Recipes — seeded browser, search, detail, and add-to-list. */
 
-import { RECIPE_CATEGORIES } from '../config.js';
+import { AISLES, RECIPE_CATEGORIES } from '../config.js';
+import { parseIngredientLine, suggestAisle } from '../model.js';
 import * as store from '../store.js';
 import { createSheetController } from '../sheet.js';
 import { formatQuantity, h, icon, ICONS, showToast } from '../ui.js';
@@ -356,15 +357,45 @@ export function mount(root) {
     const ingredientCount = recipe.ingredients.length;
 
     const ingredientNodes = recipe.ingredients.length
-      ? recipe.ingredients.map((ingredient) => {
+      ? recipe.ingredients.map((ingredient, index) => {
           const quantity = formatQuantity(ingredient);
+          const suggested = suggestAisle(ingredient.name);
+          const isAuto = ingredient.aisle === suggested;
           return h(
             'li',
             { class: 'recipe-ingredient' },
-            h('span', { class: 'recipe-ingredient__name' }, ingredient.name),
-            quantity
-              ? h('span', { class: 'recipe-ingredient__qty' }, quantity)
-              : null
+            h(
+              'div',
+              { class: 'recipe-ingredient__main' },
+              h('span', { class: 'recipe-ingredient__name' }, ingredient.name),
+              quantity
+                ? h('span', { class: 'recipe-ingredient__qty' }, quantity)
+                : null
+            ),
+            h(
+              'label',
+              { class: 'recipe-ingredient__aisle' },
+              h('span', { class: 'recipe-ingredient__aisle-label' }, 'Aisle'),
+              h(
+                'select',
+                {
+                  class: 'field__input recipe-ingredient__select',
+                  dataset: { ingredientIndex: String(index) },
+                  'aria-label': `Aisle for ${ingredient.name}`,
+                },
+                h('option', { value: '', selected: isAuto }, `Auto — ${suggested}`),
+                ...AISLES.map((aisle) =>
+                  h(
+                    'option',
+                    {
+                      value: aisle,
+                      selected: !isAuto && ingredient.aisle === aisle,
+                    },
+                    aisle
+                  )
+                )
+              )
+            )
           );
         })
       : [h('li', { class: 'recipe-ingredient' }, 'No ingredients saved yet.')];
@@ -373,6 +404,13 @@ export function mount(root) {
     refs.detailStatus.textContent = '';
     refs.detailBody.replaceChildren(
       h('p', { class: 'recipe-detail__meta' }, recipe.category),
+      ingredientCount
+        ? h(
+            'p',
+            { class: 'recipe-aisles-note' },
+            'Aisle changes save immediately and are used when you add this recipe to a list.'
+          )
+        : null,
       h(
         'ul',
         { class: 'recipe-ingredients', 'aria-label': `${recipe.title} ingredients` },
@@ -516,6 +554,26 @@ export function mount(root) {
 
   refs.detailClose.addEventListener('click', () => detailSheet.close());
 
+  refs.detailBody.addEventListener('change', (event) => {
+    const select = event.target.closest('select[data-ingredient-index]');
+    if (!select) return;
+
+    const recipe = store.getRecipe(selectedRecipeId);
+    if (!recipe) return;
+
+    const ingredient = store.setRecipeIngredientAisle(
+      recipe.id,
+      select.dataset.ingredientIndex,
+      select.value
+    );
+    if (!ingredient) {
+      refs.detailStatus.textContent = 'Could not save that aisle.';
+      return;
+    }
+
+    refs.detailStatus.textContent = `${ingredient.name} saved in ${ingredient.aisle}.`;
+  });
+
   refs.detailBody.addEventListener('click', (event) => {
     const button = event.target.closest('button[data-action]');
     if (!button) return;
@@ -622,10 +680,25 @@ export function mount(root) {
       return;
     }
 
-    const ingredients = refs.ingredientsInput.value
+    const previousRecipe = editingRecipeId ? store.getRecipe(editingRecipeId) : null;
+    const previousAisles = new Map();
+    if (previousRecipe) {
+      for (const ingredient of previousRecipe.ingredients) {
+        const key = ingredient.name.toLowerCase();
+        if (!previousAisles.has(key)) previousAisles.set(key, ingredient.aisle);
+      }
+    }
+
+    const lines = refs.ingredientsInput.value
       .split('\n')
       .map((line) => line.trim())
       .filter(Boolean);
+
+    const ingredients = lines.map((line) => {
+      const parsed = parseIngredientLine(line);
+      const aisle = previousAisles.get(parsed.name.toLowerCase());
+      return aisle ? { ...parsed, aisle } : parsed;
+    });
 
     if (!ingredients.length) {
       refs.formStatus.textContent = 'Add at least one ingredient.';

@@ -4,13 +4,14 @@
  * with a short debounce. Every mutation notifies subscribers synchronously.
  */
 
-import { RECIPE_CATEGORIES, STORAGE } from './config.js';
+import { AISLES, RECIPE_CATEGORIES, STORAGE } from './config.js';
 import { createBackup as buildBackup, parseBackup, readBackup } from './backup.js';
 import {
   createEmptyState,
   createItem,
   createList,
   createRecipe,
+  normalizeAisleOrder,
   normalizePlanEntry,
   normalizeQty,
   normalizeServings,
@@ -235,6 +236,24 @@ export function updateRecipe(recipeId, input = {}) {
   recipe.updatedAt = nowIso();
   commit();
   return recipe;
+}
+
+/** Sets one recipe ingredient's aisle without rewriting the rest of the recipe. */
+export function setRecipeIngredientAisle(recipeId, ingredientIndex, aisle = null) {
+  const recipe = getRecipe(recipeId);
+  if (!recipe) return null;
+
+  const index = Number(ingredientIndex);
+  const ingredient = Number.isInteger(index) ? recipe.ingredients[index] : null;
+  if (!ingredient) return null;
+
+  const nextAisle = AISLES.includes(aisle) ? aisle : suggestAisle(ingredient.name);
+  if (ingredient.aisle === nextAisle) return ingredient;
+
+  ingredient.aisle = nextAisle;
+  recipe.updatedAt = nowIso();
+  commit();
+  return ingredient;
 }
 
 export function deleteRecipe(recipeId) {
@@ -536,7 +555,9 @@ export function addItem(listId, input) {
   const item = createItem(input);
   if (!item.name) return null;
 
+  const explicitAisle = AISLES.includes(input.aisle) ? input.aisle : null;
   const result = addOrMergeItem(list, item);
+  if (explicitAisle && result.merged) result.item.aisle = explicitAisle;
   touchList(list);
   commit();
   return result.item;
@@ -555,11 +576,15 @@ export function updateItem(listId, itemId, input = {}) {
   const nextUnit =
     'unit' in input ? String(input.unit || '').trim() : item.unit;
   const quantityChanged = nextQty !== item.qty || nextUnit !== item.unit;
+  const nextAisle =
+    'aisle' in input && AISLES.includes(input.aisle)
+      ? input.aisle
+      : suggestAisle(name);
 
   item.name = name;
   item.qty = nextQty;
   item.unit = nextUnit;
-  item.aisle = suggestAisle(name);
+  item.aisle = nextAisle;
 
   // A manually corrected quantity owns the row; it should no longer be
   // removed or reduced when a planned meal is changed later.
@@ -780,6 +805,25 @@ export function restoreItem(listId, itemId) {
   touchList(list);
   commit();
   return item;
+}
+
+/** Saves a new shopping route for one list; every known aisle is retained once. */
+export function updateListAisleOrder(listId, aisleOrder) {
+  const list = state.lists.find((entry) => entry.id === listId);
+  if (!list) return false;
+
+  const next = normalizeAisleOrder(aisleOrder);
+  const unchanged =
+    Array.isArray(list.aisleOrder) &&
+    list.aisleOrder.length === next.length &&
+    list.aisleOrder.every((aisle, index) => aisle === next[index]);
+
+  if (unchanged) return false;
+
+  list.aisleOrder = next;
+  touchList(list);
+  commit();
+  return true;
 }
 
 export function renameList(listId, name) {

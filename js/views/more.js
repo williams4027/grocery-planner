@@ -206,6 +206,7 @@ export function mount(root) {
           <li class="is-done"><span class="roadmap__dot"></span>Alphabetical sorting within aisles</li>
           <li class="is-done"><span class="roadmap__dot"></span>Recipe ordering, duplication, and .ics export</li>
           <li class="is-done"><span class="roadmap__dot"></span>Shared Drive backup handoff</li>
+          <li class="is-done"><span class="roadmap__dot"></span>Manual aisle overrides and per-list aisle order</li>
           <li class="is-current"><span class="roadmap__dot"></span>Optional — buy-again suggestions and encrypted export</li>
         </ul>
       </section>

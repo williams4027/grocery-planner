@@ -109,26 +109,31 @@ PLAN.md                 product plan, data model, phase breakdown
 ## What works today
 
 - Keep separate lists for **Kroger, Whole Foods, Costco**, or a custom store; switch with the chips
-  above the list. Each store has its own aisle order, and the active list is remembered.
+  above the list. Each list has its own editable aisle order, and the active list is remembered.
 - Add items from the docked **Add item** button at the bottom of the list screen; the sheet stays
   open for batch entry. If you have more than one store list, choose **Add to** (Kroger, Costco, …)
   before submitting.
-- Add items with an optional quantity and description (for example, “organic” or “green”). Adding
-  an item that already exists on the target list combines the quantities instead of creating a
-  duplicate; simple unit variants like “cup” and “cups” and common name plurals like “egg” and
-  “eggs” match. Existing duplicate rows from earlier versions are merged once on upgrade. Tap the
-  pencil on any row to edit its name, quantity, or description, or choose another list under
-  **Move to** and save; delete with one tap.
-- Automatic aisle grouping (produce, dairy, pantry, …) with sticky headers.
-- Items are grouped by aisle and sorted A–Z within each aisle. Check items off; picked items dim,
+- Add items with labels above every field: name, optional quantity, description (for example,
+  “organic” or “green”), and aisle. The aisle starts at **Auto** using the item name; choose any
+  aisle to override it. Adding an item that already exists on the target list combines the
+  quantities instead of creating a duplicate; simple unit variants like “cup” and “cups” and
+  common name plurals like “egg” and “eggs” match. Existing duplicate rows from earlier versions
+  are merged once on upgrade. Tap the pencil on any row to edit its name, quantity, description,
+  or aisle, or choose another list under **Move to** and save; delete with one tap.
+- Items are grouped by aisle (produce, deli, meat and seafood, dairy, pantry, frozen, …) with sticky
+  headers. A new custom list starts Produce → Deli → Meat & Seafood → Dairy → Pantry → Frozen,
+  then the remaining aisles; store presets start with their own route, and every list can be
+  reordered.
+- Within each aisle, items are sorted A–Z. Check items off; picked items dim,
   sink to the bottom of their aisle, and both the list counter and each aisle’s progress update.
   Delete an item with one tap and use **Undo** in the toast if needed.
 - Tap the **Select** button to choose several rows. Move the selected items to another list (matching
   rows combine quantities), delete them together, or clear the whole list. Delete and clear both
   offer **Undo**; clearing a list asks for confirmation first.
-- Rename the active list inline. Open **Manage lists** to duplicate a list (including its checked
-  items), archive a list without deleting anything, or restore an archived list later. The last
-  visible list cannot be archived.
+- Rename the active list inline. Open **Manage lists** to reorder that list’s aisles for the route
+  through a particular store, duplicate a list (including its checked items), archive a list
+  without deleting anything, or restore an archived list later. The last visible list cannot be
+  archived.
 - **Add trip to Google Calendar** opens a prefilled event with the list in the description. It is a
   link, not an account connection: you pick the title/date/time, then review and save it in Google
   Calendar.
@@ -137,10 +142,11 @@ PLAN.md                 product plan, data model, phase breakdown
   use a shared lowercase vocabulary with one canonical choice for alternatives, so ingredients from
   different recipes combine cleanly. Save new recipes or edit a recipe’s title, category, and
   ingredient lines, including quantities; ingredient lines like “2 cups chopped carrots” are split
-  into quantity, unit, and item name automatically. In the recipe detail, use **Move up** and
-  **Move down** to set the order inside a category, or **Duplicate** to create a copy directly after
-  the original. Recipe-level serving scaling is deferred; the meal plan still scales by planned
-  servings.
+  into quantity, unit, and item name automatically. In the recipe detail, each ingredient has an
+  **Aisle** selector; changes save immediately and carry through when you add the recipe to a list
+  or edit its ingredient lines. Use **Move up** and **Move down** to set the order inside a
+  category, or **Duplicate** to create a copy directly after the original. Recipe-level serving
+  scaling is deferred; the meal plan still scales by planned servings.
 - **Plan a week of meals** in a 7-day × 3-slot grid. Move between weeks, jump back to today, set
   servings, copy last week into empty slots, or clear a day. Choosing a recipe adds its ingredients
   to the selected list automatically, scaled to the planned servings. Meals that share an
@@ -186,3 +192,4 @@ if it is truly stuck.
 
 **`git` exits with code 69**
 Accept the Xcode license once: `sudo xcodebuild -license accept`.
+d -license accept`.

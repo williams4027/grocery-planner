@@ -89,7 +89,7 @@ Bottom tab bar for Plan / List / Recipes / More.
   "format": "grocery-planner-backup",
   "formatVersion": 1,
   "schemaVersion": 1,
-  "appVersion": "0.9.4",
+  "appVersion": "0.9.5",
   "exportedAt": "2026-10-22T15:00:00.000Z",
   "state": {
     "recipes": [{
@@ -105,7 +105,7 @@ Bottom tab bar for Plan / List / Recipes / More.
     }],
     "lists": [{
       "id": "lst_1", "name": "Costco", "storeKey": "costco",
-      "aisleOrder": ["Household", "Pantry", "Frozen", "Dairy", "Meat & Seafood", "Produce", "Bakery", "Other"],
+      "aisleOrder": ["Household", "Pantry", "Frozen", "Dairy", "Deli", "Meat & Seafood", "Produce", "Bakery", "Other"],
       "createdAt": "...", "updatedAt": "...", "archivedAt": null,
       "items": [{
         "id": "itm_1", "name": "chicken thighs", "qty": 2, "unit": "lb",
@@ -117,7 +117,7 @@ Bottom tab bar for Plan / List / Recipes / More.
     }],
     "settings": {
       "weekStart": "sun",
-      "aisleOrder": ["Produce", "Meat & Seafood", "Dairy", "Bakery", "Frozen", "Pantry", "Household", "Other"],
+      "aisleOrder": ["Produce", "Deli", "Meat & Seafood", "Dairy", "Pantry", "Frozen", "Bakery", "Household", "Other"],
       "activeListId": "lst_1",
       "theme": "system", "lastExportAt": null, "backupNudgeDays": 14,
       "recipeSeedVersion": 1, "itemMergeVersion": 2
@@ -279,9 +279,24 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 - Picked items still sink to the bottom of their aisle and are also sorted A–Z there.
 - **Accept:** add eggs, milk, and flour to the same aisle and see eggs, flour, milk. Done.
 
+### Phase 2.8 — Manual aisle control (done, v0.9.5)
+- Added **Deli** to the known aisles. The default route is Produce → Deli → Meat & Seafood → Dairy
+  → Pantry → Frozen → Bakery → Household → Other. Lists saved before this release gain Deli after
+  Produce during normalization rather than at the bottom.
+- The add/edit item sheet gives every field a visible label above its input and adds an **Aisle**
+  selector. **Auto** keeps keyword suggestions; choosing an aisle stores an explicit override, and
+  `updateItem()` no longer replaces it with the keyword suggestion.
+- Each recipe ingredient has an **Aisle** selector in the recipe detail. Changes commit
+  immediately, and aisle overrides survive recipe text edits when the ingredient name is unchanged.
+- **Manage lists → Aisles** opens a per-list ordering sheet with up/down controls and a reset to
+  the list’s store-preset order. Ordering is local to that list, not global.
+- **Accept:** add “milk” to Deli, add a recipe with an ingredient manually placed in Frozen, edit
+  and resave the recipe, confirm both overrides persist; reorder a list’s aisles and reload. Done.
+
 ### Phase 3 — Recipes (done, v0.9.4)
 - Recipe list with search and category filters; create/edit form with a simple ingredient textarea.
-- Ingredient model: name, qty, unit, aisle (auto-suggested); leading quantities are parsed.
+- Ingredient model: name, qty, unit, aisle (auto-suggested and manually overridable); leading
+  quantities are parsed.
 - Recipe detail with edit, duplicate, and "add ingredients to list" (any visible list).
 - Manual ordering inside each category with **Move up** / **Move down**; duplicates are named
   “copy” and inserted directly after the original.

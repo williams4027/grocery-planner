@@ -11,7 +11,8 @@ import { isValidDateKey } from './dates.js';
 
 const AISLE_KEYWORDS = [
   ['Frozen', ['frozen', 'ice cream', 'popsicle', 'frozen pizza']],
-  ['Meat & Seafood', ['chicken', 'beef', 'pork', 'turkey', 'lamb', 'bacon', 'sausage', 'ham', 'steak', 'ground', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'cod', 'tilapia', 'deli']],
+  ['Deli', ['deli', 'sliced turkey', 'sliced ham', 'deli turkey', 'deli ham', 'salami', 'prosciutto', 'pepperoni', 'bologna', 'pastrami', 'rotisserie chicken', 'prepared food', 'hummus', 'olives', 'potato salad', 'coleslaw']],
+  ['Meat & Seafood', ['chicken', 'beef', 'pork', 'turkey', 'lamb', 'bacon', 'sausage', 'ham', 'steak', 'ground', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'cod', 'tilapia']],
   ['Produce', ['apple', 'banana', 'orange', 'lemon', 'lime', 'avocado', 'tomato', 'potato', 'onion', 'garlic', 'carrot', 'celery', 'cucumber', 'pepper', 'lettuce', 'spinach', 'kale', 'broccoli', 'cauliflower', 'mushroom', 'zucchini', 'squash', 'berry', 'grape', 'melon', 'peach', 'pear', 'plum', 'mango', 'pineapple', 'herb', 'cilantro', 'parsley', 'basil', 'thyme', 'rosemary', 'ginger', 'scallion', 'corn', 'cabbage', 'asparagus', 'radish', 'beet', 'eggplant']],
   ['Dairy', ['milk', 'cheese', 'yogurt', 'yoghurt', 'butter', 'cream', 'egg', 'cottage', 'mozzarella', 'parmesan', 'cheddar']],
   ['Bakery', ['bread', 'bagel', 'tortilla', 'bun', 'roll', 'baguette', 'pita', 'croissant', 'muffin', 'english muffin']],
@@ -75,10 +76,22 @@ export function suggestAisle(name) {
   return 'Other';
 }
 
-/** Keeps every known aisle once, in the supplied order, then fills in the rest. */
+/**
+ * Keeps every known aisle once, in the supplied order, then fills in the rest.
+ * Lists saved before Deli existed get it inserted after Produce so the new aisle
+ * lands in a sensible place instead of at the very bottom.
+ */
 export function normalizeAisleOrder(input) {
   const provided = Array.isArray(input) ? input.filter((aisle) => AISLES.includes(aisle)) : [];
-  return [...new Set([...provided, ...AISLES])];
+  const order = [...new Set(provided)];
+  if (!order.length) return [...AISLES];
+
+  if (!order.includes('Deli')) {
+    const produceIndex = order.indexOf('Produce');
+    order.splice(produceIndex === -1 ? 0 : produceIndex + 1, 0, 'Deli');
+  }
+
+  return [...order, ...AISLES.filter((aisle) => !order.includes(aisle))];
 }
 
 function normalizeStoreKey(value) {
