@@ -1,7 +1,7 @@
 /* Shared constants */
 
 export const APP_NAME = 'Grocery Planner';
-export const VERSION = '0.9.5';
+export const VERSION = '0.9.6';
 export const SCHEMA_VERSION = 1;
 
 /* Default route through a store; each list can reorder its own copy. */

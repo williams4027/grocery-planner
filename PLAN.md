@@ -7,13 +7,13 @@ backing up to a shared Google Drive folder. Hosted free on GitHub Pages.
   `williams4027.github.io` URL redirects here).
 - **Stack:** plain HTML + CSS + ES modules, no bundler, no build step
 - **Storage:** IndexedDB (single state document) with localStorage fallback
-- **Sync:** manual export/import only (no server, no accounts, no network calls)
+- **Sync:** manual export/import only (no server, no Grocery Planner accounts, no background sync)
 
 **Status:** Phases 0–6 implemented, plus per-store lists, Google Calendar trip export, recipe
 ordering/duplication, weekly meal planning, `.ics` calendar export, JSON backup/restore, bulk list
-actions, alphabetical aisle sorting, and shopping/list-management polish. Multi-device sharing is a
-manual backup/restore handoff through a shared Google Drive folder. There is no automatic merge or
-live sync.
+actions, alphabetical aisle sorting, a Google Drive backup search shortcut, and
+shopping/list-management polish. Multi-device sharing is a manual backup/restore handoff through a
+shared Google Drive folder. There is no automatic merge or live sync.
 
 ---
 
@@ -27,7 +27,9 @@ live sync.
 - Zero build tooling, zero dependencies, zero hosting cost.
 
 ### Non-goals (for now)
-- Live multi-device sync, accounts, or a backend.
+- Live multi-device sync, Grocery Planner accounts, automatic merge, or a backend.
+- Google Drive OAuth/API access inside the app. **Search Google Drive** is a link to Drive's own
+  search; the app never connects to a Google account.
 - Unit conversion math, nutrition tracking, price comparison, barcode scanning.
 - iOS/Android native apps.
 
@@ -78,8 +80,10 @@ Bottom tab bar for Plan / List / Recipes / More.
   survives app kill and offline reloads.
 - **Share:** export produces `grocery-planner-backup-YYYY-MM-DD.json`; use the system share sheet
   when available, copy the JSON to the clipboard, or save the downloaded file into a shared Google
-  Drive folder. On the other phone, **Restore from file** validates the backup and replaces local
-  data after confirmation. The shared folder is the multi-device handoff; there is no merge.
+  Drive folder. **Search Google Drive** opens a prefilled Drive search in a new tab so the newest
+  backup can be found without navigating Drive manually; download it, then use **Restore from
+  file**. On the other phone, **Restore from file** validates the backup and replaces local data
+  after confirmation. The shared folder is the multi-device handoff; there is no merge.
 - **Backup reminder:** More shows the last backup time. A dismissible nudge is still an optional
   backlog idea.
 
@@ -89,7 +93,7 @@ Bottom tab bar for Plan / List / Recipes / More.
   "format": "grocery-planner-backup",
   "formatVersion": 1,
   "schemaVersion": 1,
-  "appVersion": "0.9.5",
+  "appVersion": "0.9.6",
   "exportedAt": "2026-10-22T15:00:00.000Z",
   "state": {
     "recipes": [{
@@ -329,6 +333,17 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 - **Accept:** export on phone A, save to the shared folder, restore that file on phone B, and see
   the same lists, recipes, and plan. Done.
 
+### Phase 5.1 — Google Drive backup search shortcut (done, v0.9.6)
+- More adds **Search Google Drive**, a normal link to
+  `https://drive.google.com/drive/search?q=grocery-planner-backup`, opened in a new tab.
+- The user downloads the chosen backup and completes the existing **Restore from file** flow.
+- No OAuth, API key, Google Identity Services script, access token, or client-ID setup. The app
+  does not connect to a Google account or read Drive directly.
+- The system file picker used by **Restore from file** still browses Google Drive directly on
+  iPhone and Android when the Drive app is installed.
+- **Accept:** tap Search Google Drive, find the newest backup, download it, and restore it on the
+  other phone without configuring Google Cloud. Done.
+
 ### Phase 6 — Polish pass (done, v0.9.3)
 - Install help page per platform (iOS Share → Add to Home Screen; Android/desktop install button).
 - Chrome/Edge install UX: capture `beforeinstallprompt`, show an "Install app" button in More, and
@@ -393,4 +408,5 @@ blocked by the Xcode license, so the project ships its own tiny Node server.)
 - Installed on both phones from the Pages URL, works in airplane mode.
 - A week can be planned, a list generated, and shopping completed without a network.
 - Data survives force-quit and phone reboot; export/import round-trips cleanly between phones.
-- No network requests at runtime beyond the initial asset load.
+- No app-initiated network requests at runtime beyond the initial asset load. The optional Google
+  Calendar and Google Drive actions are ordinary links you choose to open.

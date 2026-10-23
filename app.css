@@ -613,6 +613,7 @@ h2 {
   color: var(--text);
   font-size: 15px;
   font-weight: 550;
+  text-decoration: none;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
@@ -1487,6 +1488,11 @@ body.sheet-open {
 .backup-buttons .btn,
 .backup-actions .btn {
   flex: 1 1 140px;
+}
+
+/* Keep the longer Drive label on one line; it is a separate restore path. */
+.backup-buttons #drive-link {
+  flex: 1 1 100%;
 }
 
 /* ---------- Store lists + calendar handoff ---------- */

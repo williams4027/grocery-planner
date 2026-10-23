@@ -45,6 +45,9 @@ function formatBackupDate(value) {
   }
 }
 
+const DRIVE_SEARCH_URL =
+  'https://drive.google.com/drive/search?q=grocery-planner-backup';
+
 export function mount(root) {
   let active = true;
   let restoreSheet = null;
@@ -88,8 +91,9 @@ export function mount(root) {
           <button class="btn" id="check-updates" type="button">Check for updates</button>
         </div>
         <p class="card__note">
-          No accounts and no server. Nothing leaves this device unless you export or share it, or
-          hand a trip to Google Calendar.
+          No Grocery Planner account and no server. Nothing leaves this device unless you export or
+          share it. Search Google Drive opens Drive in a new tab; the app does not connect to your
+          account.
         </p>
       </section>
 
@@ -118,6 +122,13 @@ export function mount(root) {
           <button class="btn btn--primary" id="export-btn" type="button">Export backup</button>
           <button class="btn" id="share-backup" type="button" hidden>Share backup</button>
           <button class="btn" id="restore-btn" type="button">Restore from file</button>
+          <a
+            class="btn"
+            id="drive-link"
+            href="${DRIVE_SEARCH_URL}"
+            target="_blank"
+            rel="noopener noreferrer"
+          >Search Google Drive</a>
         </div>
         <input
           id="restore-file"
@@ -131,7 +142,9 @@ export function mount(root) {
         <p class="card__note">
           Downloads an unencrypted JSON file with every list, item, recipe, planned meal, and
           setting. Restoring replaces all data on this device. For two phones, keep the newest
-          backup in a shared Google Drive folder and restore that file on the other phone.
+          backup in a shared Google Drive folder, then restore that file on the other phone. Search
+          Google Drive opens a prefilled Drive search; download a backup there, then use Restore
+          from file.
         </p>
       </section>
 
@@ -207,6 +220,7 @@ export function mount(root) {
           <li class="is-done"><span class="roadmap__dot"></span>Recipe ordering, duplication, and .ics export</li>
           <li class="is-done"><span class="roadmap__dot"></span>Shared Drive backup handoff</li>
           <li class="is-done"><span class="roadmap__dot"></span>Manual aisle overrides and per-list aisle order</li>
+          <li class="is-done"><span class="roadmap__dot"></span>Google Drive backup search shortcut</li>
           <li class="is-current"><span class="roadmap__dot"></span>Optional — buy-again suggestions and encrypted export</li>
         </ul>
       </section>
@@ -243,6 +257,7 @@ export function mount(root) {
     const exportButton = root.querySelector('#export-btn');
     const shareButton = root.querySelector('#share-backup');
     const restoreButton = root.querySelector('#restore-btn');
+    const driveLink = root.querySelector('#drive-link');
     const fileInput = root.querySelector('#restore-file');
     const status = root.querySelector('#backup-status');
     const restoreDialog = root.querySelector('#restore-dialog');
@@ -410,6 +425,14 @@ export function mount(root) {
     }
 
     restoreButton.addEventListener('click', () => fileInput.click());
+
+    if (driveLink) {
+      driveLink.addEventListener('click', () => {
+        status.textContent =
+          'Google Drive opened in a new tab. Download the backup you want, then tap Restore from file.';
+        showToast('Download the backup, then restore the file.');
+      });
+    }
 
     fileInput.addEventListener('change', async () => {
       const file = fileInput.files && fileInput.files[0];

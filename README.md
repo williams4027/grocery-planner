@@ -6,16 +6,18 @@ be installed from Safari on an iPhone.
 - **No build step.** Plain HTML, CSS, and ES modules. Node is only used for the dev server and icon
   generation.
 - **No backend, no accounts.** All data stays in the browser (IndexedDB). Moving data between
-  phones is an explicit JSON export/import through a shared Google Drive folder.
+  phones is an explicit JSON export/import through a shared Google Drive folder. **Search Google
+  Drive** opens a prefilled Drive search in a new tab, but the app never connects to your Google
+  account.
 - **Offline by default.** A service worker caches the app shell, so it opens in airplane mode.
 - **Free hosting.** GitHub Pages on a custom domain: `https://cheers-studios.com/grocery-planner/`
   (the `williams4027.github.io` URL redirects there).
 
 Status: **All core features are complete** — per-store lists, Google Calendar trip export, seeded
 recipes with ordering and duplication, backup and restore, weekly meal planning with `.ics` export,
-shopping/list-management polish, quantity merging, and cross-list moves. Multi-device sharing uses a
-shared Google Drive folder and manual restore; there is no automatic merge. See
-[PLAN.md](./PLAN.md) for the roadmap and optional backlog.
+shopping/list-management polish, quantity merging, cross-list moves, and a Google Drive backup
+search shortcut. Multi-device sharing uses a shared Google Drive folder and manual restore; there
+is no automatic merge. See [PLAN.md](./PLAN.md) for the roadmap and optional backlog.
 
 ## Quick start
 
@@ -159,6 +161,11 @@ PLAN.md                 product plan, data model, phase breakdown
   **Copy backup** puts the JSON on the clipboard. **Restore from file** validates the backup first,
   shows what it contains, and only replaces data after you confirm. A corrupt or newer-version file
   is rejected without touching existing data.
+- **Search Google Drive** opens a prefilled Drive search for `grocery-planner-backup` in a new tab.
+  Download the newest backup there, return to More, and use **Restore from file**. No Google
+  sign-in, OAuth client ID, or Drive permission is requested by the app. The system file picker
+  used by **Restore from file** can also browse Google Drive directly on iPhone and Android when
+  the Drive app is installed.
 - **Use a shared Google Drive folder for two phones.** Keep the newest backup there. Export on the
   phone with the latest edits, then open that file with **Restore from file** on the other phone.
   Import replaces local data, so don’t edit both phones independently and expect a merge.
@@ -171,10 +178,12 @@ PLAN.md                 product plan, data model, phase breakdown
 
 ## Data and privacy
 
-- There is no analytics, no third-party script, and no network request after the initial load.
+- There is no analytics, no third-party script, and the app makes no network requests after the
+  initial load.
 - Data will live in one IndexedDB document on the device (plus a localStorage fallback).
-- The Google Calendar handoff is a normal link. The list is placed in the URL only when you tap
-  **Open Google Calendar**, so nothing is sent until you choose to continue there.
+- The Google Calendar handoff and Google Drive search are normal links. The list is placed in the
+  Calendar URL only when you tap **Open Google Calendar**; Drive search opens Google Drive in a new
+  tab. Nothing is sent by the app until you choose to continue on those pages.
 - **iPhone caveat:** Safari can evict site storage after about seven days of non-use. Installing to
   the Home Screen protects against this. Download a backup from More regularly and keep the newest
   copy in the shared Drive folder or another safe place.
