@@ -5,7 +5,7 @@ import { suggestAisle } from '../model.js';
 import * as store from '../store.js';
 import { buildGoogleCalendarUrl } from '../calendar.js';
 import { createSheetController } from '../sheet.js';
-import { h, icon, ICONS, showToast, formatQuantity } from '../ui.js';
+import { h, icon, ICONS, showCheer, showToast, formatQuantity } from '../ui.js';
 
 const PRESET_ORDER = ['kroger', 'wholefoods', 'costco', 'custom'];
 
@@ -1287,7 +1287,9 @@ export function mount(root) {
     refs.form.reset();
     renderAisleOptions();
     renderAddListOptions({ forceActive: true });
-    refs.status.textContent = `Added ${item.name} to ${target.name} in ${item.aisle}.`;
+    const confirmation = `Added ${item.name} to ${target.name} in ${item.aisle}.`;
+    refs.status.textContent = confirmation;
+    showCheer('item', confirmation);
     refs.nameInput.focus({ preventScroll: true });
   });
 

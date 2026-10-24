@@ -712,14 +712,20 @@ h2 {
 
 .toast {
   position: fixed;
+  top: auto;
+  right: auto;
+  bottom: calc(
+    var(--tabbar-height) + env(safe-area-inset-bottom) + 16px + var(--keyboard-gap, 0px)
+  );
   left: 50%;
-  bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom) + 16px);
   z-index: 40;
   display: flex;
   align-items: center;
   gap: 10px;
   max-width: calc(100vw - 40px);
+  margin: 0;
   padding: 10px 16px;
+  border: 0;
   border-radius: 999px;
   background: #1b211c;
   color: #fffdf7;
@@ -727,6 +733,24 @@ h2 {
   font-weight: 550;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
   transform: translateX(-50%);
+}
+
+.toast--detail {
+  align-items: flex-start;
+  border-radius: 18px;
+}
+
+.toast__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.toast__detail {
+  color: rgba(255, 253, 247, 0.72);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
 }
 
 .toast__action {
@@ -753,13 +777,24 @@ body.has-add-dock .main {
 }
 
 body.has-add-dock .toast {
-  bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom) + 84px);
+  bottom: calc(
+    var(--tabbar-height) + env(safe-area-inset-bottom) + 84px + var(--keyboard-gap, 0px)
+  );
+}
+
+body.sheet-open .toast {
+  top: calc(env(safe-area-inset-top) + 64px);
+  bottom: auto;
 }
 
 @media (prefers-color-scheme: dark) {
   .toast {
     background: #eef2ec;
     color: #101713;
+  }
+
+  .toast__detail {
+    color: rgba(16, 23, 19, 0.66);
   }
 
   .toast__action {
@@ -1395,7 +1430,9 @@ body.sheet-open {
 }
 
 .sheet[open] {
-  animation: sheet-in 220ms ease both;
+  /* No fill mode: a retained transform would make the fixed toast position
+     relative to the sheet instead of the viewport. */
+  animation: sheet-in 220ms ease;
 }
 
 .sheet::backdrop {

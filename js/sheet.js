@@ -11,8 +11,10 @@ function syncViewportGap() {
   if (!viewport) return;
 
   const gap = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+  const value = `${Math.round(gap)}px`;
+  document.body.style.setProperty('--keyboard-gap', value);
   for (const dialog of openDialogs) {
-    dialog.style.setProperty('--keyboard-gap', `${Math.round(gap)}px`);
+    dialog.style.setProperty('--keyboard-gap', value);
   }
 }
 
@@ -23,6 +25,13 @@ if (viewport) {
 
 function resolveTarget(value) {
   return typeof value === 'function' ? value() : value;
+}
+
+function moveToastTo(dialog) {
+  const toast = document.getElementById('toast');
+  if (!toast) return;
+  if (dialog && !toast.hidden) dialog.append(toast);
+  else if (!dialog && toast.parentElement !== document.body) document.body.append(toast);
 }
 
 export function createSheetController(dialog, options = {}) {
@@ -39,6 +48,7 @@ export function createSheetController(dialog, options = {}) {
 
     finalized = true;
     openDialogs.delete(dialog);
+    moveToastTo(null);
     dialog.style.removeProperty('--keyboard-gap');
     syncSheetLock();
     if (onClose) onClose();
@@ -54,6 +64,7 @@ export function createSheetController(dialog, options = {}) {
     dialog.showModal();
     finalized = false;
     openDialogs.add(dialog);
+    moveToastTo(dialog);
     syncSheetLock();
     syncViewportGap();
     if (onOpen) onOpen();
@@ -78,6 +89,7 @@ export function createSheetController(dialog, options = {}) {
     finalized = true;
     if (dialog.open) dialog.close();
     openDialogs.delete(dialog);
+    moveToastTo(null);
     dialog.style.removeProperty('--keyboard-gap');
     syncSheetLock();
   }

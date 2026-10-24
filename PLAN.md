@@ -12,9 +12,9 @@ backing up to a shared Google Drive folder. Hosted free on GitHub Pages.
 **Status:** Phases 0–6 implemented, plus per-store lists, Google Calendar trip export, recipe
 ordering/duplication, weekly meal planning, `.ics` calendar export, JSON backup/restore, bulk list
 actions, alphabetical aisle sorting, a Google Drive backup search shortcut, factory reset to
-seeded data, a double-tap zoom guard, and shopping/list-management polish. Multi-device sharing is
-a manual backup/restore handoff through a shared Google Drive folder. There is no automatic merge
-or live sync.
+seeded data, a double-tap zoom guard, rotating heart-filled acknowledgements, and
+shopping/list-management polish. Multi-device sharing is a manual backup/restore handoff through a
+shared Google Drive folder. There is no automatic merge or live sync.
 
 ---
 
@@ -94,7 +94,7 @@ Bottom tab bar for Plan / List / Recipes / More.
   "format": "grocery-planner-backup",
   "formatVersion": 1,
   "schemaVersion": 1,
-  "appVersion": "0.9.8",
+  "appVersion": "0.9.9",
   "exportedAt": "2026-10-22T15:00:00.000Z",
   "state": {
     "recipes": [{
@@ -362,6 +362,19 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
   or `maximum-scale=1`.
 - **Accept:** double-tap the page on a phone and the zoom level stays at 100%; pinch still zooms.
   Done.
+
+### Phase 5.4 — Rotating household acknowledgements (done, v0.9.9)
+- Picking a recipe for a planned meal shows a rotating heart-filled phrase (“Ooh, that sounds
+  delicious”) above the normal plan confirmation.
+- Manually adding an item to a list shows a separate rotating phrase (“Good thinking, you’re the
+  best babe!”) with the added-item detail below it.
+- The two rotations advance independently and persist in localStorage on the device. They are not
+  part of app state, are never uploaded, and fall back gracefully when storage is unavailable.
+- While a sheet is open, the toast is moved into that top-layer dialog so it remains crisp and
+  visible; closing the sheet moves the toast back to the page. The existing Undo/action toast
+  behavior is unchanged.
+- **Accept:** plan a recipe twice and add two manual items; each action cycles to the next phrase
+  with heart emoji and shows the normal confirmation beneath it. Done.
 
 ### Phase 6 — Polish pass (done, v0.9.3)
 - Install help page per platform (iOS Share → Add to Home Screen; Android/desktop install button).

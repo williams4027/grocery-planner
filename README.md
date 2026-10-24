@@ -16,9 +16,10 @@ be installed from Safari on an iPhone.
 Status: **All core features are complete** — per-store lists, Google Calendar trip export, seeded
 recipes with ordering and duplication, backup and restore, weekly meal planning with `.ics` export,
 shopping/list-management polish, quantity merging, cross-list moves, a Google Drive backup search
-shortcut, factory reset to seeded data, and a guard against accidental double-tap zoom.
-Multi-device sharing uses a shared Google Drive folder and manual restore; there is no automatic
-merge. See [PLAN.md](./PLAN.md) for the roadmap and optional backlog.
+shortcut, factory reset to seeded data, a guard against accidental double-tap zoom, and rotating
+heart-filled acknowledgements. Multi-device sharing uses a shared Google Drive folder and manual
+restore; there is no automatic merge. See [PLAN.md](./PLAN.md) for the roadmap and optional
+backlog.
 
 ## Quick start
 
@@ -156,6 +157,8 @@ PLAN.md                 product plan, data model, phase breakdown
   ingredient keep one combined row; updating or clearing a meal removes only that meal’s share of
   the quantity. Items you already checked off are kept. **Download .ics** exports the visible week
   as all-day events for Apple or Google Calendar; the file is built locally and never uploaded.
+- Planning a recipe or manually adding a list item shows a rotating, heart-filled thank-you toast.
+  The phrase rotation is stored only on the device and never leaves it.
 - Everything persists in IndexedDB on the device, survives force-quit, and works offline.
 - Double-tap zoom is disabled so quick taps on list controls do not magnify the page. Pinch-to-zoom
   still works for accessibility.

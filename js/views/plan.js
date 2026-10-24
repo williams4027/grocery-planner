@@ -10,7 +10,7 @@ import {
   toDateKey,
 } from '../dates.js';
 import { createSheetController } from '../sheet.js';
-import { h, icon, ICONS, showToast } from '../ui.js';
+import { h, icon, ICONS, showCheer, showToast } from '../ui.js';
 
 const WEEKDAY = new Intl.DateTimeFormat(undefined, { weekday: 'long' });
 const MONTH_DAY = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
@@ -653,7 +653,7 @@ export function mount(root) {
 
     planSheet.close();
     renderWeek();
-    showToast(planToast(result));
+    showCheer('recipe', planToast(result));
   }
 
   function updatePlan() {

@@ -1,7 +1,7 @@
 /* Shared constants */
 
 export const APP_NAME = 'Grocery Planner';
-export const VERSION = '0.9.8';
+export const VERSION = '0.9.9';
 export const SCHEMA_VERSION = 1;
 
 /* Default route through a store; each list can reorder its own copy. */
@@ -87,4 +87,5 @@ export const STORAGE = {
   storeName: 'kv',
   stateKey: 'state',
   localStorageKey: 'grocery-planner:state:v1',
+  cheerKey: 'grocery-planner:cheer:v1',
 };

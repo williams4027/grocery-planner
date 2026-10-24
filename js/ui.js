@@ -1,5 +1,7 @@
 /* Tiny DOM helpers and shared chrome (icons, toast). */
 
+import { STORAGE } from './config.js';
+
 export const ICONS = {
   check: `
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -114,6 +116,73 @@ export function formatQuantity(item) {
 
 let toastTimer = null;
 
+const CHEERS = {
+  recipe: [
+    '💕 Ooh, that sounds delicious 💕',
+    '❤️ That’s going to be so good, babe ❤️',
+    '😋 Great choice — can’t wait for that one 😋',
+    '🥰 You always pick the best meals 🥰',
+    '💚 Love that idea, sweetheart 💚',
+  ],
+  item: [
+    '💕 Good thinking, you’re the best babe! 💕',
+    '❤️ You’re on top of it, love! ❤️',
+    '😍 Nice one, babe — thank you! 😍',
+    '🥰 You’re the sweetest for adding that 🥰',
+    '💚 Look at you, so organized! 💚',
+  ],
+};
+
+let cheerIndexes = null;
+
+function getCheerIndexes() {
+  if (cheerIndexes) return cheerIndexes;
+
+  cheerIndexes = { recipe: 0, item: 0 };
+  try {
+    const stored = localStorage.getItem(STORAGE.cheerKey);
+    const parsed = stored ? JSON.parse(stored) : null;
+    if (parsed && typeof parsed === 'object') {
+      for (const kind of Object.keys(CHEERS)) {
+        const value = Number(parsed[kind]);
+        if (Number.isInteger(value) && value >= 0) {
+          cheerIndexes[kind] = value % CHEERS[kind].length;
+        }
+      }
+    }
+  } catch (error) {
+    // localStorage can be unavailable in private mode; start at the first phrase.
+  }
+
+  return cheerIndexes;
+}
+
+function saveCheerIndexes(indexes) {
+  try {
+    localStorage.setItem(STORAGE.cheerKey, JSON.stringify(indexes));
+  } catch (error) {
+    // Rotation still works for this session when storage is unavailable.
+  }
+}
+
+/** Shows a rotating, heart-filled acknowledgement for a household action. */
+export function showCheer(kind, detail = '') {
+  const phrases = CHEERS[kind];
+  if (!phrases || !phrases.length) return;
+
+  const indexes = getCheerIndexes();
+  const phrase = phrases[indexes[kind] % phrases.length];
+  indexes[kind] = (indexes[kind] + 1) % phrases.length;
+  saveCheerIndexes(indexes);
+
+  showToast(phrase, { detail, duration: 3600 });
+}
+
+function toastHost() {
+  const dialogs = document.querySelectorAll('dialog[open]');
+  return dialogs.length ? dialogs[dialogs.length - 1] : document.body;
+}
+
 function hideToast() {
   const toast = document.getElementById('toast');
   if (!toast) return;
@@ -121,12 +190,15 @@ function hideToast() {
   clearTimeout(toastTimer);
   toastTimer = null;
   toast.hidden = true;
+  toast.classList.remove('toast--detail');
   toast.replaceChildren();
+  if (toast.parentElement !== document.body) document.body.append(toast);
 }
 
 /**
  * Shows a transient message. An optional action (for example Undo) keeps the
- * toast visible longer and invokes onAction when tapped.
+ * toast visible longer and invokes onAction when tapped. A detail line keeps
+ * the useful confirmation underneath a larger message.
  */
 export function showToast(message, options = 2400) {
   const toast = document.getElementById('toast');
@@ -138,10 +210,28 @@ export function showToast(message, options = 2400) {
     typeof config.actionLabel === 'string' &&
     config.actionLabel &&
     typeof config.onAction === 'function';
+  const hasDetail = typeof config.detail === 'string' && config.detail.trim();
 
   clearTimeout(toastTimer);
   toastTimer = null;
-  toast.replaceChildren(document.createTextNode(String(message)));
+
+  const text = document.createElement('span');
+  text.className = 'toast__text';
+
+  const messageNode = document.createElement('span');
+  messageNode.className = 'toast__message';
+  messageNode.textContent = hasDetail ? `${String(message)} ` : String(message);
+  text.append(messageNode);
+
+  if (hasDetail) {
+    const detail = document.createElement('span');
+    detail.className = 'toast__detail';
+    detail.textContent = config.detail;
+    text.append(detail);
+  }
+
+  toast.replaceChildren(text);
+  toast.classList.toggle('toast--detail', Boolean(hasDetail));
 
   if (hasAction) {
     const action = document.createElement('button');
@@ -159,6 +249,8 @@ export function showToast(message, options = 2400) {
     toast.append(action);
   }
 
+  const host = toastHost();
+  if (toast.parentElement !== host) host.append(toast);
   toast.hidden = false;
   toastTimer = setTimeout(hideToast, hasAction ? Math.max(config.duration, 5000) : config.duration);
 }
