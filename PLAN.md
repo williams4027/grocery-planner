@@ -97,7 +97,7 @@ Bottom tab bar for Plan / List / Recipes / More.
   "format": "grocery-planner-backup",
   "formatVersion": 1,
   "schemaVersion": 2,
-  "appVersion": "0.10.0",
+  "appVersion": "0.10.1",
   "exportedAt": "2026-10-22T15:00:00.000Z",
   "state": {
     "recipes": [{
@@ -392,7 +392,7 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 - **Accept:** plan a recipe twice and add two manual items; each action cycles to the next phrase
   with heart emoji and shows the normal confirmation beneath it. Done.
 
-### Phase 5.5 — Encrypted two-phone sync (done, v0.10.0)
+### Phase 5.5 — Encrypted two-phone sync (done, v0.10.1)
 - **Opt-in household sync:** More can create a household or join one by pasting a long
   `gp1.<householdId>.<secret>` invite code. The creating phone shows the code with copy/share
   actions; the joining phone previews what will be replaced and requires confirmation.

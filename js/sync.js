@@ -33,6 +33,12 @@ const status = {
   paired: false,
 };
 
+function snapshotState(state) {
+  return typeof structuredClone === 'function'
+    ? structuredClone(state)
+    : JSON.parse(JSON.stringify(state));
+}
+
 /* ---------- Public API ---------- */
 
 export function isConfigured() {
@@ -126,7 +132,7 @@ export async function createHousehold() {
   keys = nextKeys;
 
   await saveCredentials();
-  lastRemoteState = store.getState();
+  lastRemoteState = snapshotState(store.getState());
   setStatus('synced');
   startPolling();
   return encodeCode(householdId, secret);
@@ -181,7 +187,7 @@ export async function joinHousehold(code) {
     createdAt: nowIso(),
   };
   keys = await deriveKeys(credentials.householdId, credentials.secret);
-  lastRemoteState = store.getState();
+  lastRemoteState = snapshotState(store.getState());
 
   await saveCredentials();
   setStatus('synced');
@@ -261,7 +267,7 @@ export async function hasPreSyncSnapshot() {
 
 async function performSync() {
   const nextKeys = await ensureKeys();
-  const localBefore = store.getState();
+  const localBefore = snapshotState(store.getState());
   const head = await apiGetRev(credentials.householdId, nextKeys);
 
   // The revision only changes when the other phone writes. A local edit can
@@ -299,7 +305,7 @@ async function performSync() {
 
     if (statesEqual(nextState, remoteState)) {
       credentials.lastRev = remote.rev;
-      lastRemoteState = remoteState;
+      lastRemoteState = snapshotState(remoteState);
       break;
     }
 
@@ -317,7 +323,7 @@ async function performSync() {
         remote.rev
       );
       credentials.lastRev = saved.rev;
-      lastRemoteState = nextState;
+      lastRemoteState = snapshotState(nextState);
       break;
     } catch (error) {
       if (error.status !== 409 || attempt === 2) throw error;
