@@ -8,6 +8,8 @@ node_modules/
 *.log
 .env
 .env.local
+worker/.dev.vars
+worker/.wrangler/
 
 # Editors
 .vscode/

@@ -1525,6 +1525,32 @@ body.sheet-open {
   line-height: 1.45;
 }
 
+.share-code {
+  width: 100%;
+  min-height: 84px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  resize: vertical;
+}
+
+.share-code::placeholder {
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+.share-code:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
 .backup-buttons .btn,
 .backup-actions .btn {
   flex: 1 1 140px;

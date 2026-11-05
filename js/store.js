@@ -10,6 +10,7 @@ import {
   createEmptyState,
   createItem,
   createList,
+  createPlanTombstone,
   createRecipe,
   normalizeAisleOrder,
   normalizePlanEntry,
@@ -468,8 +469,10 @@ export function clearPlanEntry(date, slot) {
   const entry = getPlanEntry(date, slot);
   if (!entry) return null;
 
+  const timestamp = nowIso();
   const removed = removePlanItems(entry.id);
   state.plan = state.plan.filter((item) => item.id !== entry.id);
+  addPlanTombstone(date, slot, timestamp);
   commit();
   return { entry, removed };
 }
@@ -478,8 +481,12 @@ export function clearPlanDay(date) {
   const entries = state.plan.filter((entry) => entry.date === date);
   if (!entries.length) return { cleared: 0, removed: 0 };
 
+  const timestamp = nowIso();
   let removed = 0;
-  for (const entry of entries) removed += removePlanItems(entry.id);
+  for (const entry of entries) {
+    removed += removePlanItems(entry.id);
+    addPlanTombstone(entry.date, entry.slot, timestamp);
+  }
 
   state.plan = state.plan.filter((entry) => entry.date !== date);
   commit();
@@ -488,6 +495,47 @@ export function clearPlanDay(date) {
 
 export function getStorageInfo() {
   return { mode: storageMode, error: saveError || loadError };
+}
+
+/** Reads a device-local metadata value (sync credentials, snapshots). */
+export async function readMeta(key) {
+  if (database) {
+    return idbGet(database, key);
+  }
+
+  try {
+    const raw = localStorage.getItem(`${STORAGE.metaLocalStoragePrefix}${key}`);
+    return raw === null ? null : JSON.parse(raw);
+  } catch (error) {
+    return null;
+  }
+}
+
+/** Writes a device-local metadata value. Never part of backups or sync state. */
+export async function writeMeta(key, value) {
+  if (database) {
+    await idbPutKey(database, key, value);
+    return;
+  }
+
+  if (storageMode === 'memory') {
+    throw new Error('This browser is blocking storage.');
+  }
+
+  localStorage.setItem(`${STORAGE.metaLocalStoragePrefix}${key}`, JSON.stringify(value));
+}
+
+export async function deleteMeta(key) {
+  if (database) {
+    await idbDeleteKey(database, key);
+    return;
+  }
+
+  try {
+    localStorage.removeItem(`${STORAGE.metaLocalStoragePrefix}${key}`);
+  } catch (error) {
+    // Best effort.
+  }
 }
 
 export function getDataSummary() {
@@ -533,6 +581,7 @@ export function importBackup(input) {
   if (parsed.exportedAt) state.settings.lastExportAt = parsed.exportedAt;
   ensureListDedupe();
   ensureRecipeOrder();
+  reconcileListItems();
   loadError = '';
   if (storageMode !== 'memory') saveError = '';
   commit();
@@ -541,6 +590,21 @@ export function importBackup(input) {
     summary: summarizeState(state),
     exportedAt: parsed.exportedAt,
   };
+}
+
+/**
+ * Replaces local state with a state that has already been merged with the
+ * partner's phone. Keeps the same notification/persistence path as a normal
+ * edit so every open view refreshes.
+ */
+export function applySyncState(nextState) {
+  state = normalizeState(nextState);
+  ensureRecipeOrder();
+  reconcileListItems();
+  loadError = '';
+  if (storageMode !== 'memory') saveError = '';
+  commit({ touch: false });
+  return state;
 }
 
 /**
@@ -672,10 +736,11 @@ export function moveItem(listId, itemId, targetListId) {
     movedItem = existing;
     merged = true;
   } else {
-    const index = source.items.indexOf(item);
-    if (index !== -1) source.items.splice(index, 1);
-    target.items.push(item);
+    const moved = cloneItemForList(item, timestamp);
+    item.deletedAt = timestamp;
     item.updatedAt = timestamp;
+    target.items.push(moved);
+    movedItem = moved;
   }
 
   touchList(source);
@@ -724,11 +789,10 @@ export function moveItems(listId, itemIds, targetListId) {
       item.updatedAt = timestamp;
       merged += 1;
     } else {
-      const index = source.items.indexOf(item);
-      if (index === -1) continue;
-      source.items.splice(index, 1);
-      target.items.push(item);
+      const moved = cloneItemForList(item, timestamp);
+      item.deletedAt = timestamp;
       item.updatedAt = timestamp;
+      target.items.push(moved);
     }
 
     moved += 1;
@@ -1047,8 +1111,8 @@ function notify() {
   }
 }
 
-function commit() {
-  state.updatedAt = nowIso();
+function commit({ touch = true } = {}) {
+  if (touch) state.updatedAt = nowIso();
   notify();
   scheduleSave();
 }
@@ -1067,6 +1131,8 @@ function upsertPlanEntry({ date, slot, recipeId = null, title = '', servings = n
   });
   if (!next) return null;
 
+  removePlanTombstone(date, slot);
+
   if (existing) {
     existing.recipeId = next.recipeId;
     existing.title = next.title;
@@ -1077,6 +1143,24 @@ function upsertPlanEntry({ date, slot, recipeId = null, title = '', servings = n
 
   state.plan.push(next);
   return next;
+}
+
+function removePlanTombstone(date, slot) {
+  if (!Array.isArray(state.planTombstones) || !state.planTombstones.length) return;
+
+  const key = `${date}:${slot}`;
+  state.planTombstones = state.planTombstones.filter(
+    (entry) => `${entry.date}:${entry.slot}` !== key
+  );
+}
+
+function addPlanTombstone(date, slot, deletedAt = nowIso()) {
+  const tombstone = createPlanTombstone(date, slot, deletedAt);
+  if (!tombstone) return;
+
+  removePlanTombstone(date, slot);
+  if (!Array.isArray(state.planTombstones)) state.planTombstones = [];
+  state.planTombstones.push(tombstone);
 }
 
 function removePlanItems(planEntryId) {
@@ -1364,6 +1448,105 @@ function mergeItem(existing, item, { checked = false, timestamp = nowIso() } = {
   return existing;
 }
 
+/** Moves a row to another list while leaving a tombstone behind for sync. */
+function cloneItemForList(item, timestamp = nowIso()) {
+  const copy = createItem({
+    name: item.name,
+    qty: item.qty,
+    unit: item.unit,
+    aisle: item.aisle,
+    sourceRecipeId: item.sourceRecipeId,
+    sourcePlanEntryId: item.sourcePlanEntryId,
+    planContributions: item.planContributions,
+  });
+
+  copy.checked = Boolean(item.checked);
+  copy.note = typeof item.note === 'string' ? item.note : null;
+  copy.addedAt = item.addedAt;
+  copy.updatedAt = timestamp;
+  return copy;
+}
+
+function itemUpdatedTime(item) {
+  return Date.parse(item && item.updatedAt) || Date.parse(item && item.addedAt) || 0;
+}
+
+/**
+ * After a sync merge, two phones may have independently added the same
+ * ingredient. Combine matching rows, sum manual quantities, union planned-meal
+ * contributions by entry id (never double-count the same meal), and tombstone
+ * the losing rows so the cleanup propagates.
+ */
+function reconcileListItems() {
+  let changedAny = false;
+
+  for (const list of state.lists) {
+    const groups = new Map();
+
+    for (const item of list.items) {
+      if (item.deletedAt || !item.name) continue;
+      const key = itemMatchKey(item);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(item);
+    }
+
+    let listChanged = false;
+
+    for (const group of groups.values()) {
+      if (group.length < 2) continue;
+
+      group.sort(
+        (a, b) =>
+          itemUpdatedTime(b) - itemUpdatedTime(a) ||
+          String(a.id).localeCompare(String(b.id))
+      );
+
+      const [base, ...duplicates] = group;
+      const contributions = planContributionMap(base);
+      let baseQty = manualBaseQuantity(base, contributions);
+      let checked = Boolean(base.checked);
+
+      for (const duplicate of duplicates) {
+        const duplicateContributions = planContributionMap(duplicate);
+        baseQty += manualBaseQuantity(duplicate, duplicateContributions);
+
+        for (const [planEntryId, qty] of Object.entries(duplicateContributions)) {
+          contributions[planEntryId] = Math.max(
+            Number(contributions[planEntryId]) || 0,
+            Number(qty) || 0
+          );
+        }
+
+        // Only keep the row bought when both copies were already picked up.
+        checked = checked && Boolean(duplicate.checked);
+
+        if (!base.sourceRecipeId && duplicate.sourceRecipeId) {
+          base.sourceRecipeId = duplicate.sourceRecipeId;
+        }
+        if (!base.note && duplicate.note) base.note = duplicate.note;
+        if (!base.aisle && duplicate.aisle) base.aisle = duplicate.aisle;
+
+        const timestamp = nowIso();
+        duplicate.deletedAt = timestamp;
+        duplicate.updatedAt = timestamp;
+        listChanged = true;
+      }
+
+      setItemQuantity(base, baseQty, contributions);
+      base.checked = checked;
+      base.updatedAt = nowIso();
+    }
+
+    if (listChanged) {
+      touchList(list);
+      changedAny = true;
+    }
+  }
+
+  if (changedAny) state.updatedAt = nowIso();
+  return changedAny;
+}
+
 /**
  * Adds an item to a list, or combines its quantity with an existing matching
  * item. Adding to an already checked row unchecks it because the new quantity
@@ -1532,12 +1715,26 @@ function idbGet(db, key) {
 }
 
 function idbPut(db, value) {
+  return idbPutKey(db, STORAGE.stateKey, value);
+}
+
+function idbPutKey(db, key, value) {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(STORAGE.storeName, 'readwrite');
-    transaction.objectStore(STORAGE.storeName).put(value, STORAGE.stateKey);
+    transaction.objectStore(STORAGE.storeName).put(value, key);
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error || new Error('IndexedDB write failed'));
     transaction.onabort = () => reject(transaction.error || new Error('IndexedDB write aborted'));
+  });
+}
+
+function idbDeleteKey(db, key) {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORAGE.storeName, 'readwrite');
+    transaction.objectStore(STORAGE.storeName).delete(key);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error || new Error('IndexedDB delete failed'));
+    transaction.onabort = () => reject(transaction.error || new Error('IndexedDB delete aborted'));
   });
 }
 

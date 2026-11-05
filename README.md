@@ -5,21 +5,22 @@ be installed from Safari on an iPhone.
 
 - **No build step.** Plain HTML, CSS, and ES modules. Node is only used for the dev server and icon
   generation.
-- **No backend, no accounts.** All data stays in the browser (IndexedDB). Moving data between
-  phones is an explicit JSON export/import through a shared Google Drive folder. **Search Google
-  Drive** opens a prefilled Drive search in a new tab, but the app never connects to your Google
-  account.
+- **Optional encrypted sync, no accounts.** All data stays in the browser (IndexedDB) by default.
+  Two phones can join the same household with a long invite code and sync automatically through a
+  small Cloudflare relay. The relay stores only one AES-256-GCM ciphertext per household; the
+  invite secret never leaves the phones. Manual JSON export/import through a shared Google Drive
+  folder still works as a backup and as a fallback.
 - **Offline by default.** A service worker caches the app shell, so it opens in airplane mode.
+  Sync pauses while offline and catches up when the app is visible and connected.
 - **Free hosting.** GitHub Pages on a custom domain: `https://cheers-studios.com/grocery-planner/`
   (the `williams4027.github.io` URL redirects there).
 
 Status: **All core features are complete** — per-store lists, Google Calendar trip export, seeded
 recipes with ordering and duplication, backup and restore, weekly meal planning with `.ics` export,
 shopping/list-management polish, quantity merging, cross-list moves, a Google Drive backup search
-shortcut, factory reset to seeded data, a guard against accidental double-tap zoom, and rotating
-heart-filled acknowledgements. Multi-device sharing uses a shared Google Drive folder and manual
-restore; there is no automatic merge. See [PLAN.md](./PLAN.md) for the roadmap and optional
-backlog.
+shortcut, factory reset to seeded data, a guard against accidental double-tap zoom, rotating
+heart-filled acknowledgements, and optional end-to-end encrypted sync between two phones. See
+[PLAN.md](./PLAN.md) for the roadmap and optional backlog.
 
 ## Quick start
 
@@ -80,6 +81,8 @@ Every deploy:
 - [ ] Bump `VERSION` in `sw.js` (invalidates the shell cache — **required**, or phones keep old
       files).
 - [ ] Add any new shell files to `SHELL_ASSETS` in `sw.js`.
+- [ ] If the relay changed, redeploy it with `cd worker && npx wrangler@latest deploy`; confirm
+      `SYNC_URL` in `js/config.js` matches the deployed Worker.
 - [ ] `npm run check`
 - [ ] Commit, push, and open the Pages URL on a phone.
 - [ ] On the phone: verify the version in More and test with airplane mode on.
@@ -99,6 +102,8 @@ js/dates.js             local date keys, week starts, and day arithmetic
 js/backup.js            JSON backup format, parsing, and validation
 js/calendar.js          pure Google Calendar trip-detail, URL, and .ics builders
 js/store.js             state container, IndexedDB/localStorage persistence, actions
+js/merge.js             deterministic per-entity merge for sync
+js/sync.js              encrypted relay client, polling, snapshots, disconnect
 js/seed-recipes.js      recipes seeded from the meal-planning sheet
 js/sheet.js             shared bottom-sheet dialog controller
 js/ui.js                DOM helper, icons, toast
@@ -106,6 +111,8 @@ js/pwa.js               service worker registration and update checks
 js/views/               plan.js, list.js, recipes.js, more.js
 dev-server.cjs          zero-dependency static server
 scripts/make-icons.cjs  generates PNG icons (no image tooling required)
+scripts/test-merge.cjs  deterministic merge tests
+worker/                 Cloudflare Worker + D1 encrypted sync relay
 icons/                  generated PWA icons
 PLAN.md                 product plan, data model, phase breakdown
 ```
@@ -175,6 +182,14 @@ PLAN.md                 product plan, data model, phase breakdown
 - **Use a shared Google Drive folder for two phones.** Keep the newest backup there. Export on the
   phone with the latest edits, then open that file with **Restore from file** on the other phone.
   Import replaces local data, so don’t edit both phones independently and expect a merge.
+- **Or turn on automatic encrypted sync.** In **More → Share this household**, create a household
+  and copy the long `gp1.…` invite code to the other phone. On the second phone, open **More →
+  Join with code**, paste it, review what will be replaced, and confirm. Both phones then push
+  changes within a couple of seconds and poll for updates every 5 seconds while the app is open.
+  The Cloudflare relay sees only ciphertext, a random household id, and an auth hash — never
+  recipes, lists, plans, or the invite secret. The joining phone saves a local pre-sync snapshot
+  first, and **Restore pre-sync snapshot** is available in More. Sync is optional; everything
+  still works offline and without a household.
 - **Factory reset** in More asks for confirmation, then clears every local list, item, recipe,
   planned meal, and setting and restores a fresh Groceries list plus the original seeded recipes.
   Export a backup first if you may need the current data.
@@ -187,9 +202,14 @@ PLAN.md                 product plan, data model, phase breakdown
 
 ## Data and privacy
 
-- There is no analytics, no third-party script, and the app makes no network requests after the
-  initial load.
-- Data will live in one IndexedDB document on the device (plus a localStorage fallback).
+- There is no analytics and no third-party script. The only runtime network requests are optional:
+  the encrypted sync relay when a household is connected, plus the normal Google Calendar and
+  Google Drive links you choose to open.
+- Data lives in one IndexedDB document on the device (plus a localStorage fallback).
+- **Encrypted sync:** if you create or join a household, the app sends one opaque AES-256-GCM
+  ciphertext (and its IV) to the Cloudflare relay, authenticated with a token derived from the
+  invite secret. The relay cannot decrypt it. Anyone who has the full invite code can join the
+  household, so treat it like a house key and share it only with the other phone.
 - The Google Calendar handoff and Google Drive search are normal links. The list is placed in the
   Calendar URL only when you tap **Open Google Calendar**; Drive search opens Google Drive in a new
   tab. Nothing is sent by the app until you choose to continue on those pages.

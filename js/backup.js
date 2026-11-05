@@ -82,6 +82,25 @@ function validatePlanEntry(entry, index) {
   }
 }
 
+function validatePlanTombstone(tombstone, index) {
+  if (!isObject(tombstone)) {
+    throw invalid(`Planned meal deletion ${index + 1} in that backup is not valid.`);
+  }
+
+  const date = cleanName(tombstone.date);
+  const slot = cleanName(tombstone.slot).toLowerCase();
+  if (!isValidDateKey(date) || !PLAN_SLOTS.includes(slot)) {
+    throw invalid(`Planned meal deletion ${index + 1} has an invalid date or slot.`);
+  }
+
+  if (
+    typeof tombstone.deletedAt !== 'string' ||
+    Number.isNaN(Date.parse(tombstone.deletedAt))
+  ) {
+    throw invalid(`Planned meal deletion ${index + 1} has an invalid timestamp.`);
+  }
+}
+
 function validateState(state) {
   if (!Array.isArray(state.lists) || !state.lists.length) {
     throw invalid('That backup is missing its lists.');
@@ -101,6 +120,13 @@ function validateState(state) {
       throw invalid('That backup has an invalid meal plan.');
     }
     state.plan.forEach(validatePlanEntry);
+  }
+
+  if (state.planTombstones !== undefined) {
+    if (!Array.isArray(state.planTombstones)) {
+      throw invalid('That backup has an invalid meal-plan deletion list.');
+    }
+    state.planTombstones.forEach(validatePlanTombstone);
   }
 
   if (state.settings !== undefined && !isObject(state.settings)) {

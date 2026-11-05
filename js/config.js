@@ -1,8 +1,13 @@
 /* Shared constants */
 
 export const APP_NAME = 'Grocery Planner';
-export const VERSION = '0.9.9';
-export const SCHEMA_VERSION = 1;
+export const VERSION = '0.10.0';
+export const SCHEMA_VERSION = 2;
+
+/* Encrypted sync relay. Leave empty to disable sharing in a build.
+ * See worker/README.md for the one-time Cloudflare setup. */
+export const SYNC_URL = 'https://grocery-planner-sync.grocery-planner-sync.workers.dev';
+export const SYNC_POLL_MS = 5000;
 
 /* Default route through a store; each list can reorder its own copy. */
 export const AISLES = [
@@ -88,4 +93,7 @@ export const STORAGE = {
   stateKey: 'state',
   localStorageKey: 'grocery-planner:state:v1',
   cheerKey: 'grocery-planner:cheer:v1',
+  syncKey: 'sync-credentials',
+  preSyncKey: 'pre-sync-snapshot',
+  metaLocalStoragePrefix: 'grocery-planner:meta:',
 };

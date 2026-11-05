@@ -1,0 +1,9 @@
+name = "grocery-planner-sync"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "grocery-planner-sync"
+database_id = "49b53749-f19b-4452-a87e-54a9aff8317f"

@@ -3,6 +3,7 @@
 import { APP_NAME } from './config.js';
 import * as store from './store.js';
 import { initPwa } from './pwa.js';
+import { initSync } from './sync.js';
 import { mount as mountPlan } from './views/plan.js';
 import { mount as mountList } from './views/list.js';
 import { mount as mountRecipes } from './views/recipes.js';
@@ -90,6 +91,10 @@ async function boot() {
   started = true;
   render();
   initPwa();
+
+  initSync().catch((error) => {
+    console.error('Sync initialization failed', error);
+  });
 }
 
 window.addEventListener('hashchange', () => {

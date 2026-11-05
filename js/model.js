@@ -365,10 +365,33 @@ export function normalizePlanEntry(input) {
   };
 }
 
+export function createPlanTombstone(date, slot, deletedAt = nowIso()) {
+  return normalizePlanTombstone({ date, slot, deletedAt });
+}
+
+/** A deleted plan slot is kept as a tombstone so the deletion can sync. */
+export function normalizePlanTombstone(input) {
+  if (!input || typeof input !== 'object') return null;
+
+  const date = String(input.date || '').trim();
+  const slot = String(input.slot || '')
+    .trim()
+    .toLowerCase();
+  if (!isValidDateKey(date) || !PLAN_SLOTS.includes(slot)) return null;
+
+  const deletedAt =
+    typeof input.deletedAt === 'string' && !Number.isNaN(Date.parse(input.deletedAt))
+      ? input.deletedAt
+      : null;
+  if (!deletedAt) return null;
+
+  return { date, slot, deletedAt };
+}
+
 export function createEmptyState() {
   const timestamp = nowIso();
   const list = createList('Groceries');
-  const settings = defaultSettings();
+  const settings = defaultSettings(timestamp);
   settings.activeListId = list.id;
 
   return {
@@ -378,11 +401,12 @@ export function createEmptyState() {
     lists: [list],
     recipes: [],
     plan: [],
+    planTombstones: [],
     settings,
   };
 }
 
-function defaultSettings() {
+function defaultSettings(updatedAt = nowIso()) {
   return {
     weekStart: 'sun',
     aisleOrder: [...AISLES],
@@ -393,10 +417,11 @@ function defaultSettings() {
     keepAwake: false,
     recipeSeedVersion: 0,
     itemMergeVersion: 0,
+    updatedAt,
   };
 }
 
-function normalizeSettings(input) {
+function normalizeSettings(input, fallbackUpdatedAt = null) {
   const settings = input && typeof input === 'object' ? input : {};
   const provided = Array.isArray(settings.aisleOrder)
     ? settings.aisleOrder.filter((aisle) => AISLES.includes(aisle))
@@ -424,6 +449,13 @@ function normalizeSettings(input) {
       Number.isFinite(settings.itemMergeVersion) && settings.itemMergeVersion >= 0
         ? settings.itemMergeVersion
         : 0,
+    updatedAt:
+      typeof settings.updatedAt === 'string' && !Number.isNaN(Date.parse(settings.updatedAt))
+        ? settings.updatedAt
+        : typeof fallbackUpdatedAt === 'string' &&
+            !Number.isNaN(Date.parse(fallbackUpdatedAt))
+          ? fallbackUpdatedAt
+          : nowIso(),
   };
 }
 
@@ -544,21 +576,43 @@ export function normalizeState(input) {
   }
 
   const timestamp = nowIso();
-  const settings = normalizeSettings(input.settings);
+  const settings = normalizeSettings(input.settings, input.updatedAt);
   const lists = Array.isArray(input.lists)
     ? input.lists.map((list) => normalizeList(list, settings.aisleOrder)).filter(Boolean)
     : [];
 
-  const plan = [];
-  const planKeys = new Set();
+  const planByKey = new Map();
   for (const rawEntry of Array.isArray(input.plan) ? input.plan : []) {
     const entry = normalizePlanEntry(rawEntry);
     if (!entry) continue;
 
     const key = `${entry.date}:${entry.slot}`;
-    if (planKeys.has(key)) continue;
-    planKeys.add(key);
-    plan.push(entry);
+    const existing = planByKey.get(key);
+    if (!existing || entry.updatedAt > existing.updatedAt) planByKey.set(key, entry);
+  }
+
+  const tombstones = new Map();
+  for (const rawTombstone of Array.isArray(input.planTombstones)
+    ? input.planTombstones
+    : []) {
+    const tombstone = normalizePlanTombstone(rawTombstone);
+    if (!tombstone) continue;
+
+    const key = `${tombstone.date}:${tombstone.slot}`;
+    const existing = tombstones.get(key);
+    if (!existing || tombstone.deletedAt > existing.deletedAt) {
+      tombstones.set(key, tombstone);
+    }
+  }
+
+  // A tombstone removes the matching live entry; a newer live entry revives
+  // the slot. Equal timestamps treat the delete as the winner.
+  for (const [key, entry] of [...planByKey.entries()]) {
+    const tombstone = tombstones.get(key);
+    if (!tombstone) continue;
+
+    if (tombstone.deletedAt >= entry.updatedAt) planByKey.delete(key);
+    else tombstones.delete(key);
   }
 
   const state = {
@@ -569,7 +623,8 @@ export function normalizeState(input) {
     recipes: Array.isArray(input.recipes)
       ? input.recipes.map(normalizeRecipe).filter(Boolean)
       : [],
-    plan,
+    plan: [...planByKey.values()],
+    planTombstones: [...tombstones.values()],
     settings,
   };
 

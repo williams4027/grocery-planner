@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS households (
+  id TEXT PRIMARY KEY,
+  auth_hash TEXT NOT NULL,
+  blob TEXT NOT NULL,
+  iv TEXT NOT NULL,
+  rev INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);

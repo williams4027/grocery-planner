@@ -1,12 +1,13 @@
 {
   "name": "grocery-planner",
-  "version": "0.9.9",
+  "version": "0.10.0",
   "private": true,
   "type": "module",
   "description": "Local-first meal planning and grocery list PWA for GitHub Pages",
   "scripts": {
     "dev": "node dev-server.cjs",
     "icons": "node scripts/make-icons.cjs",
-    "check": "for f in js/*.js js/views/*.js sw.js; do node --check \"$f\" || exit 1; done && node --check dev-server.cjs && node --check scripts/make-icons.cjs"
+    "check": "for f in js/*.js js/views/*.js sw.js worker/src/*.js; do node --check \"$f\" || exit 1; done && node --check dev-server.cjs && node --check scripts/make-icons.cjs",
+    "test": "node scripts/test-merge.cjs"
   }
 }

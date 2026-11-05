@@ -1,20 +1,20 @@
 # Grocery Planner — Project Plan
 
-A local-first PWA for weekly meal planning and grocery shopping, moved between phones by
-backing up to a shared Google Drive folder. Hosted free on GitHub Pages.
+A local-first PWA for weekly meal planning and grocery shopping, with optional end-to-end encrypted
+sync between two phones. Hosted free on GitHub Pages.
 
 - **Live URL:** `https://cheers-studios.com/grocery-planner/` (custom domain; the
   `williams4027.github.io` URL redirects here).
 - **Stack:** plain HTML + CSS + ES modules, no bundler, no build step
 - **Storage:** IndexedDB (single state document) with localStorage fallback
-- **Sync:** manual export/import only (no server, no Grocery Planner accounts, no background sync)
+- **Sync:** optional Cloudflare Worker + D1 relay storing one AES-256-GCM ciphertext per household;
+  manual JSON export/import still works as a backup and fallback
 
 **Status:** Phases 0–6 implemented, plus per-store lists, Google Calendar trip export, recipe
 ordering/duplication, weekly meal planning, `.ics` calendar export, JSON backup/restore, bulk list
 actions, alphabetical aisle sorting, a Google Drive backup search shortcut, factory reset to
-seeded data, a double-tap zoom guard, rotating heart-filled acknowledgements, and
-shopping/list-management polish. Multi-device sharing is a manual backup/restore handoff through a
-shared Google Drive folder. There is no automatic merge or live sync.
+seeded data, a double-tap zoom guard, rotating heart-filled acknowledgements, and optional
+end-to-end encrypted two-phone sync.
 
 ---
 
@@ -23,20 +23,23 @@ shared Google Drive folder. There is no automatic merge or live sync.
 ### Goals
 - Plan meals for the week on a phone, then shop from an auto-generated list.
 - Fast, thumb-friendly shopping mode that works fully offline.
-- Data lives only on the device; moving data between phones is an explicit file export/import.
+- Data lives only on the device by default; moving data between phones is an explicit file
+  export/import or an optional end-to-end encrypted household sync.
 - Deploy on every increment; usable on a real phone from Phase 0.
 - Zero build tooling, zero dependencies, zero hosting cost.
 
 ### Non-goals (for now)
-- Live multi-device sync, Grocery Planner accounts, automatic merge, or a backend.
+- Grocery Planner accounts, passwords, email sign-in, or a server that can read household data.
+  Sync is opt-in and the relay only stores ciphertext.
 - Google Drive OAuth/API access inside the app. **Search Google Drive** is a link to Drive's own
   search; the app never connects to a Google account.
 - Unit conversion math, nutrition tracking, price comparison, barcode scanning.
 - iOS/Android native apps.
 
 ### Known constraints
-- **Node 14 is installed**; no modern bundler. Hence the build-free stack. (Upgrading Node is
-  optional later if we want Playwright tests or a bundler.)
+- **Node 14 is the system default**; Node 22 is installed at `~/.local/node22` and symlinked into
+  `~/.local/bin` for Wrangler and tests. No modern bundler is used. Hence the build-free stack.
+  (Upgrading the system Node is optional later if we want Playwright tests or a bundler.)
 - **Safari storage eviction:** iOS deletes site data after ~7 days of non-use *unless* the site is
   added to the Home Screen. Onboarding must push "Add to Home Screen", and the app should nag
   about backups.
@@ -93,8 +96,8 @@ Bottom tab bar for Plan / List / Recipes / More.
 {
   "format": "grocery-planner-backup",
   "formatVersion": 1,
-  "schemaVersion": 1,
-  "appVersion": "0.9.9",
+  "schemaVersion": 2,
+  "appVersion": "0.10.0",
   "exportedAt": "2026-10-22T15:00:00.000Z",
   "state": {
     "recipes": [{
@@ -107,6 +110,9 @@ Bottom tab bar for Plan / List / Recipes / More.
       "id": "pln_1", "date": "2026-10-26", "slot": "dinner",
       "recipeId": "rcp_1", "title": "Sheet-pan chicken", "servings": 4,
       "createdAt": "...", "updatedAt": "..."
+    }],
+    "planTombstones": [{
+      "date": "2026-10-27", "slot": "dinner", "deletedAt": "..."
     }],
     "lists": [{
       "id": "lst_1", "name": "Costco", "storeKey": "costco",
@@ -125,16 +131,20 @@ Bottom tab bar for Plan / List / Recipes / More.
       "aisleOrder": ["Produce", "Deli", "Meat & Seafood", "Dairy", "Pantry", "Frozen", "Bakery", "Household", "Other"],
       "activeListId": "lst_1",
       "theme": "system", "lastExportAt": null, "backupNudgeDays": 14,
-      "recipeSeedVersion": 1, "itemMergeVersion": 2
+      "keepAwake": false, "recipeSeedVersion": 1, "itemMergeVersion": 2,
+      "updatedAt": "..."
     }
   }
 }
 ```
 
 **Sharing rule:** backup and restore replaces the whole local state. Keep one latest backup in a
-shared Google Drive folder; export on the phone with the newest edits, then restore that file on
-the other phone. Do not edit both phones independently and expect changes to combine. Deletes are
-soft (`deletedAt`) locally, but import does not merge or prune them.
+shared Google Drive folder as a fallback; export on the phone with the newest edits, then restore
+that file on the other phone. For automatic two-phone use, create a household instead: both phones
+merge per entity by `updatedAt`, plan deletions travel as tombstones, and the relay only sees
+ciphertext. Do not use both workflows at once on the same pair of phones. Deletes are soft
+(`deletedAt`) locally, and sync keeps those tombstones so a delete is not resurrected by the other
+phone.
 **Schema version:** refused if newer than the app understands; migrated forward if older.
 
 ### Deliberate simplifications
@@ -182,12 +192,18 @@ Everything else (Node 14, npm, Safari) is fine for this stack, since there is no
 │   ├── dates.js            # local date keys, week starts, day arithmetic
 │   ├── calendar.js         # Google Calendar details, URL builder, and .ics export (pure)
 │   ├── backup.js           # JSON backup format, validation, restore
+│   ├── merge.js            # deterministic per-entity merge for sync
+│   ├── sync.js             # encrypted relay client, polling, snapshots
 │   ├── store.js            # state container, IndexedDB persistence, subscribe()
 │   ├── seed-recipes.js     # recipes imported from the meal-planning sheet
 │   ├── sheet.js            # shared bottom-sheet dialog controller
 │   ├── pwa.js              # service worker registration, update checks
 │   ├── ui.js               # tiny DOM helpers, icons, toast
 │   └── views/              # plan.js, list.js, recipes.js, more.js
+├── scripts/
+│   ├── make-icons.cjs      # generates PNG icons
+│   └── test-merge.cjs      # deterministic merge tests
+├── worker/                 # Cloudflare Worker + D1 encrypted sync relay
 ├── PLAN.md
 └── README.md
 ```
@@ -376,7 +392,31 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 - **Accept:** plan a recipe twice and add two manual items; each action cycles to the next phrase
   with heart emoji and shows the normal confirmation beneath it. Done.
 
-### Phase 6 — Polish pass (done, v0.9.3)
+### Phase 5.5 — Encrypted two-phone sync (done, v0.10.0)
+- **Opt-in household sync:** More can create a household or join one by pasting a long
+  `gp1.<householdId>.<secret>` invite code. The creating phone shows the code with copy/share
+  actions; the joining phone previews what will be replaced and requires confirmation.
+- **End-to-end encryption:** HKDF derives a separate auth token and AES-256-GCM key from the
+  random 256-bit invite secret. The Cloudflare Worker + D1 relay stores only a random household
+  id, a SHA-256 auth hash, the ciphertext, its IV, a revision, and timestamps. It never receives
+  the invite secret, encryption key, or plaintext.
+- **Merge model:** each phone pulls the encrypted state, merges per entity by `updatedAt`,
+  resolves ties deterministically, and pushes with `If-Match: <rev>`. A `409` triggers a re-read
+  and retry. Lists, items, recipes, plan entries, and the shared settings merge; device-local
+  settings (active list, theme, keep-awake, backup time, migration markers) stay on the phone.
+- **Plan deletions:** `planTombstones` record deleted date/slot pairs so clearing a meal on one
+  phone is not resurrected by the other. Schema version is now 2; backups understand tombstones.
+- **Polling:** the app checks the revision every 5 seconds while visible and pushes about 1.5
+  seconds after a local edit. Sync pauses offline and resumes when the app is visible again.
+- **Safety:** joining and syncing save a local pre-sync snapshot first. More exposes **Restore
+  pre-sync snapshot**. Factory reset and backup restore disconnect sync before replacing data so
+  stale reset data is not pushed to the other phone.
+- **Deliberately deferred:** **Stop sharing** and **Delete cloud copy** UI. There is no delete
+  endpoint; resetting or restoring leaves the encrypted cloud row in place.
+- **Accept:** create a household on phone A, join on phone B, add and edit items and planned meals
+  on both, see changes appear within a few seconds, delete a planned meal without resurrection,
+  and restore the pre-sync snapshot on the joining phone. Done in code; deployment TLS is
+  provisioning.
 - Install help page per platform (iOS Share → Add to Home Screen; Android/desktop install button).
 - Chrome/Edge install UX: capture `beforeinstallprompt`, show an "Install app" button in More, and
   hide it on iOS where the event never fires; listen for `appinstalled`.
@@ -408,6 +448,19 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 5. Repo → Settings → Pages → Source: *Deploy from a branch* → `main` / `(root)` → Save.
 6. Wait for the Pages build, open `https://cheers-studios.com/grocery-planner/`.
 
+**Sync relay (one-time, or when the Worker changes)**
+1. `cd worker`
+2. `npx wrangler@latest login` (or `login --device` on a headless/phone flow).
+3. `npx wrangler@latest d1 create grocery-planner-sync`, then paste the returned `database_id`
+   into `worker/wrangler.toml`.
+4. `npx wrangler@latest d1 execute grocery-planner-sync --remote --file=./schema.sql`
+5. `npx wrangler@latest deploy`
+6. Copy the deployed `https://<worker>.<subdomain>.workers.dev` URL into `SYNC_URL` in
+   `js/config.js`, then redeploy the static app and bump both version constants.
+7. If the new `workers.dev` hostname returns a TLS handshake error, the certificate is still
+   provisioning. Wait and retry; a newly created account subdomain can take a while. HTTP will
+   already reach the Worker while HTTPS waits.
+
 **Every release after that**
 1. Bump `VERSION` in `js/config.js` and `sw.js` (critical — otherwise phones keep the old shell).
 2. Update the cache list only if the file set changed (shell is precached; `js/` and `css` use
@@ -429,9 +482,12 @@ blocked by the Xcode license, so the project ships its own tiny Node server.)
 | Photos/notes lost after phone change | Export reminder + "last backup" in Settings; import test in Phase 2. |
 | Service worker serves stale app | Cache versioning, update toast, short cache TTL for `js/`. |
 | Subpath breaks assets on Pages | All URLs relative (`./js/app.js`), no leading slashes, hash routing. |
-| Two phones overwrite each other | One shared-folder handoff at a time; export before switching phones and keep the latest file. |
+| Two phones overwrite each other | Automatic sync merges per entity; the file handoff still requires one phone at a time. Keep a backup before switching workflows. |
+| Sync relay outage or bad network | Local-first writes continue; sync pauses and retries. Pre-sync snapshot and JSON export remain available. |
+| Lost invite code | The code is the only key. Show it again from More on a connected phone; otherwise create a new household. |
+| Accidental cloud spend | Workers/D1 stay on the free tier and hard-stop at daily limits; do not add a payment method or upgrade to Workers Paid. |
 | Safari quirks in standalone mode | Test on-device every phase; avoid `navigator.share` as the only export path. |
-| Scope creep (prices, nutrition, sync) | Explicit non-goals; Phase 7 backlog. |
+| Scope creep (prices, nutrition, real-time collaboration) | Keep per-entity sync intentionally small; no accounts or presence. Explicit non-goals. |
 
 ---
 
@@ -440,5 +496,7 @@ blocked by the Xcode license, so the project ships its own tiny Node server.)
 - Installed on both phones from the Pages URL, works in airplane mode.
 - A week can be planned, a list generated, and shopping completed without a network.
 - Data survives force-quit and phone reboot; export/import round-trips cleanly between phones.
-- No app-initiated network requests at runtime beyond the initial asset load. The optional Google
-  Calendar and Google Drive actions are ordinary links you choose to open.
+- If a household is connected, changes reach the other phone within a few seconds while both apps
+  are open, and the relay never receives plaintext. Without a household, no sync request is made
+  at runtime beyond the initial asset load. The optional Google Calendar and Google Drive actions
+  remain ordinary links you choose to open.
