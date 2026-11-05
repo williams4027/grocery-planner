@@ -184,8 +184,10 @@ PLAN.md                 product plan, data model, phase breakdown
   Import replaces local data, so don’t edit both phones independently and expect a merge.
 - **Or turn on automatic encrypted sync.** In **More → Share this household**, create a household
   and copy the long `gp1.…` invite code to the other phone. On the second phone, open **More →
-  Join with code**, paste it, review what will be replaced, and confirm. Both phones then push
-  changes within a couple of seconds and poll for updates every 5 seconds while the app is open.
+  Join with code**, paste it, review what will be replaced, and confirm. Changes you make push
+  within a couple of seconds from any screen; while **More** is open, the app also checks for
+  partner updates once a minute. Use **Use a different code** on More to switch to another
+  household. The old encrypted cloud copy is left in place, but this phone forgets its old code.
   The Cloudflare relay sees only ciphertext, a random household id, and an auth hash — never
   recipes, lists, plans, or the invite secret. The joining phone saves a local pre-sync snapshot
   first, and **Restore pre-sync snapshot** is available in More. Sync is optional; everything

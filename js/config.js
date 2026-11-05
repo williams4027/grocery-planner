@@ -1,13 +1,13 @@
 /* Shared constants */
 
 export const APP_NAME = 'Grocery Planner';
-export const VERSION = '0.10.1';
+export const VERSION = '0.10.2';
 export const SCHEMA_VERSION = 2;
 
 /* Encrypted sync relay. Leave empty to disable sharing in a build.
  * See worker/README.md for the one-time Cloudflare setup. */
 export const SYNC_URL = 'https://grocery-planner-sync.grocery-planner-sync.workers.dev';
-export const SYNC_POLL_MS = 5000;
+export const SYNC_POLL_MS = 60000;
 
 /* Default route through a store; each list can reorder its own copy. */
 export const AISLES = [

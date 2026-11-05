@@ -14,10 +14,13 @@ import {
   disconnectLocal,
   getSharingCode,
   getStatus as getSyncStatus,
+  hasPreSyncSnapshot,
   inspectCode,
   isConfigured as isSyncConfigured,
   isPaired as isSyncPaired,
   joinHousehold,
+  restorePreSyncSnapshot,
+  setSyncPollingActive,
   subscribeStatus,
   syncNow,
 } from '../sync.js';
@@ -241,10 +244,12 @@ export function mount(root) {
               ? `<div class="btn-row">
                   <button class="btn btn--primary" id="sync-now" type="button">Sync now</button>
                   <button class="btn" id="show-share-code" type="button">Show sharing code</button>
+                  <button class="btn" id="share-join" type="button">Use a different code</button>
                 </div>
                 <p class="card__note">
-                  Changes sync automatically while both apps are open. The sharing code is also the
-                  encryption key; keep it private.
+                  Changes you make sync automatically. While this screen is open, updates from your
+                  partner are checked once a minute. The sharing code is also the encryption key;
+                  keep it private.
                 </p>`
               : `<div class="btn-row">
                   <button class="btn btn--primary" id="share-create" type="button">Set up sharing</button>
@@ -255,6 +260,12 @@ export function mount(root) {
                   replaces the second phone&rsquo;s local data after confirmation.
                 </p>`
         }
+        <div class="btn-row" id="pre-sync-row" hidden>
+          <button class="btn" id="restore-pre-sync" type="button">
+            Restore pre-sync snapshot
+          </button>
+        </div>
+        <p id="pre-sync-status" class="sheet__status" role="status" aria-live="polite"></p>
       </section>
 
       <section class="card" aria-labelledby="reset-card-title">
@@ -456,7 +467,7 @@ export function mount(root) {
             ${ICONS.close}
           </button>
         </div>
-        <p class="restore-warning">
+        <p class="restore-warning" id="share-join-warning">
           This replaces every list, item, recipe, planned meal, and setting on this phone with the
           other phone&rsquo;s encrypted data. Export a backup first if you may need the current
           data.
@@ -595,7 +606,12 @@ export function mount(root) {
     const shareJoinInput = root.querySelector('#share-join-input');
     const shareJoinPreview = root.querySelector('#share-join-preview');
     const shareJoinSummary = root.querySelector('#share-join-summary');
+    const shareJoinWarning = root.querySelector('#share-join-warning');
+    const shareJoinTitle = root.querySelector('#share-join-title');
     const shareCodeValue = root.querySelector('#share-code-value');
+    const preSyncRow = root.querySelector('#pre-sync-row');
+    const preSyncButton = root.querySelector('#restore-pre-sync');
+    const preSyncStatus = root.querySelector('#pre-sync-status');
 
     if (shareCreateDialog) {
       createSheet = createSheetController(shareCreateDialog, {
@@ -643,6 +659,42 @@ export function mount(root) {
       });
     }
 
+    if (preSyncRow && preSyncButton) {
+      hasPreSyncSnapshot()
+        .then((available) => {
+          if (!active) return;
+          preSyncRow.hidden = !available;
+        })
+        .catch(() => {});
+
+      preSyncButton.addEventListener('click', async () => {
+        const confirmed = window.confirm(
+          'Restore the data from before this phone joined a shared plan? Sharing will be turned off on this phone; the encrypted cloud copy is not deleted.'
+        );
+        if (!confirmed) return;
+
+        preSyncButton.disabled = true;
+        preSyncStatus.textContent = 'Restoring…';
+        try {
+          const restored = await restorePreSyncSnapshot();
+          if (!restored) {
+            preSyncStatus.textContent = 'No pre-sync snapshot was found.';
+            preSyncRow.hidden = true;
+            return;
+          }
+          render();
+          showToast(
+            `Restored pre-sync snapshot: ${summaryLabel(restored.summary)}. Sharing is off.`
+          );
+        } catch (error) {
+          console.error('Restore pre-sync snapshot failed', error);
+          preSyncStatus.textContent =
+            error.message || 'Could not restore the pre-sync snapshot.';
+          preSyncButton.disabled = false;
+        }
+      });
+    }
+
     if (syncNowButton) {
       syncNowButton.addEventListener('click', async () => {
         syncNowButton.disabled = true;
@@ -659,10 +711,19 @@ export function mount(root) {
 
     if (shareJoinButton) {
       shareJoinButton.addEventListener('click', () => {
+        const paired = isSyncPaired();
         pendingJoin = null;
         shareJoinInput.value = '';
         shareJoinStatus.textContent = '';
         shareJoinPreview.hidden = true;
+        if (shareJoinTitle) {
+          shareJoinTitle.textContent = paired ? 'Switch shared plans' : 'Join a shared plan';
+        }
+        if (shareJoinWarning) {
+          shareJoinWarning.textContent = paired
+            ? 'This replaces every list, item, recipe, planned meal, and setting on this phone with the other phone’s encrypted data. This phone will forget its current sharing code; the old encrypted cloud copy stays online. Export a backup first if you may need the current data.'
+            : 'This replaces every list, item, recipe, planned meal, and setting on this phone with the other phone’s encrypted data. Export a backup first if you may need the current data.';
+        }
         joinSheet.open();
       });
     }
@@ -762,10 +823,15 @@ export function mount(root) {
         shareJoinStatus.textContent = 'Checking the code…';
         try {
           const inspected = await inspectCode(code);
+          const paired = isSyncPaired();
           pendingJoin = { code };
           shareJoinSummary.textContent = `This shared plan contains ${summaryLabel(
             inspected.summary
-          )}. Joining will replace everything on this phone.`;
+          )}. Joining will replace everything on this phone.${
+            paired
+              ? ' Your current sharing code will be forgotten; the old encrypted cloud copy stays online.'
+              : ''
+          }`;
           shareJoinPreview.hidden = false;
           shareJoinStatus.textContent = '';
         } catch (error) {
@@ -787,7 +853,9 @@ export function mount(root) {
         shareJoinStatus.textContent = 'Joining and replacing this phone…';
 
         try {
-          const result = await joinHousehold(pendingJoin.code);
+          const result = await joinHousehold(pendingJoin.code, {
+            replaceExisting: isSyncPaired(),
+          });
           joinSheet.close();
           render();
           showToast(`Joined shared plan: ${summaryLabel(result.summary)}.`);
@@ -1029,9 +1097,11 @@ export function mount(root) {
   }
 
   render();
+  setSyncPollingActive(true);
 
   return () => {
     active = false;
+    setSyncPollingActive(false);
     if (unsubInstall) {
       unsubInstall();
       unsubInstall = null;

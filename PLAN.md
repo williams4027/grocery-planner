@@ -97,7 +97,7 @@ Bottom tab bar for Plan / List / Recipes / More.
   "format": "grocery-planner-backup",
   "formatVersion": 1,
   "schemaVersion": 2,
-  "appVersion": "0.10.1",
+  "appVersion": "0.10.2",
   "exportedAt": "2026-10-22T15:00:00.000Z",
   "state": {
     "recipes": [{
@@ -392,7 +392,7 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 - **Accept:** plan a recipe twice and add two manual items; each action cycles to the next phrase
   with heart emoji and shows the normal confirmation beneath it. Done.
 
-### Phase 5.5 — Encrypted two-phone sync (done, v0.10.1)
+### Phase 5.5 — Encrypted two-phone sync (done, v0.10.2)
 - **Opt-in household sync:** More can create a household or join one by pasting a long
   `gp1.<householdId>.<secret>` invite code. The creating phone shows the code with copy/share
   actions; the joining phone previews what will be replaced and requires confirmation.
@@ -406,17 +406,23 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
   settings (active list, theme, keep-awake, backup time, migration markers) stay on the phone.
 - **Plan deletions:** `planTombstones` record deleted date/slot pairs so clearing a meal on one
   phone is not resurrected by the other. Schema version is now 2; backups understand tombstones.
-- **Polling:** the app checks the revision every 5 seconds while visible and pushes about 1.5
-  seconds after a local edit. Sync pauses offline and resumes when the app is visible again.
+- **Polling:** the app checks the revision once a minute while More is open and pushes about 1.5
+  seconds after a local edit from any screen. Sync pauses offline and resumes when More is visible
+  again.
 - **Safety:** joining and syncing save a local pre-sync snapshot first. More exposes **Restore
   pre-sync snapshot**. Factory reset and backup restore disconnect sync before replacing data so
   stale reset data is not pushed to the other phone.
-- **Deliberately deferred:** **Stop sharing** and **Delete cloud copy** UI. There is no delete
-  endpoint; resetting or restoring leaves the encrypted cloud row in place.
+- **Switching:** **Use a different code** on More checks the new code, saves a pre-sync snapshot,
+  forgets the current local credentials, and joins the new household. The old encrypted cloud row
+  is left in place.
+- **Deliberately deferred:** standalone **Stop sharing** and **Delete cloud copy** UI. There is
+  no delete endpoint; resetting, restoring, or switching leaves the old encrypted cloud row in
+  place.
 - **Accept:** create a household on phone A, join on phone B, add and edit items and planned meals
-  on both, see changes appear within a few seconds, delete a planned meal without resurrection,
-  and restore the pre-sync snapshot on the joining phone. Done in code; deployment TLS is
-  provisioning.
+  on both, and delete a planned meal without resurrection. Local edits push within a couple of
+  seconds; partner changes are checked once a minute while More is open. Restore the pre-sync
+  snapshot from More to undo a join or switch. Done in code and verified in two browser profiles
+  against the deployed Pages app and relay.
 - Install help page per platform (iOS Share → Add to Home Screen; Android/desktop install button).
 - Chrome/Edge install UX: capture `beforeinstallprompt`, show an "Install app" button in More, and
   hide it on iOS where the event never fires; listen for `appinstalled`.

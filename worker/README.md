@@ -79,5 +79,5 @@ alone.
 
 D1 and Workers have free tiers that are far above what two phones need. The
 Worker caps request bodies at 2 MB and stores one row per household. The app
-polls the revision every 5 seconds only while visible, and pushes 1.5 seconds
-after a local edit.
+polls the revision once a minute only while the More screen is open, and
+pushes 1.5 seconds after a local edit.

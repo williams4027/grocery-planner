@@ -20,6 +20,7 @@ let initialized = false;
 let syncing = false;
 let syncPromise = null;
 let pollTimer = null;
+let pollingRequested = false;
 let pushTimer = null;
 let applyingRemote = false;
 let unsubscribeStore = null;
@@ -69,6 +70,22 @@ export function getSharingCode() {
     : null;
 }
 
+/**
+ * Enables periodic checks only while the More screen is mounted. Local edits
+ * still push from every screen through the store subscription.
+ */
+export function setSyncPollingActive(active) {
+  pollingRequested = Boolean(active);
+  if (!pollingRequested) {
+    stopPolling();
+    return;
+  }
+  if (!credentials) return;
+
+  startPolling();
+  syncNow('more').catch(() => {});
+}
+
 export async function initSync() {
   if (initialized) return getStatus();
   initialized = true;
@@ -101,7 +118,7 @@ export async function initSync() {
     document.addEventListener('visibilitychange', handleVisibility);
   }
 
-  if (credentials) {
+  if (credentials && pollingRequested) {
     startPolling();
     syncNow('startup').catch(() => {});
   }
@@ -165,16 +182,27 @@ export async function inspectCode(code) {
  * Replaces this phone's data with the partner's encrypted snapshot. A local
  * pre-sync snapshot is kept so the change can be undone from More.
  */
-export async function joinHousehold(code) {
+export async function joinHousehold(code, { replaceExisting = false } = {}) {
   assertConfigured();
-  if (credentials) throw new Error('This phone is already sharing.');
+  if (credentials && !replaceExisting) {
+    throw new Error('This phone is already sharing.');
+  }
 
+  // Let an in-flight sync finish before dropping the old credentials.
+  if (credentials && syncPromise) {
+    await syncPromise.catch(() => {});
+  }
+
+  // Inspect the new code before disconnecting, so a typo cannot strand the
+  // phone without its current sharing setup.
   const inspected = await inspectCode(code);
 
   await store.writeMeta(STORAGE.preSyncKey, {
     savedAt: nowIso(),
     state: store.getState(),
   });
+
+  if (credentials) await disconnectLocal();
 
   store.applySyncState(inspected.state);
 
@@ -200,7 +228,7 @@ export async function joinHousehold(code) {
 }
 
 /** Best-effort sync used by buttons and the polling loop. */
-export async function syncNow() {
+export async function syncNow(reason = 'manual') {
   if (!SYNC_BASE || !credentials) return { ok: false, skipped: true };
   if (syncing) return syncPromise;
 
@@ -210,7 +238,9 @@ export async function syncNow() {
   }
 
   syncing = true;
-  setStatus('syncing');
+  // Background checks run on a timer. Showing "Syncing…" for each one makes
+  // the status flicker, so only the explicit button shows that state.
+  if (reason === 'manual') setStatus('syncing');
 
   syncPromise = performSync()
     .then((result) => {
@@ -346,7 +376,9 @@ function schedulePush() {
 
 function startPolling() {
   stopPolling();
-  if (!credentials || typeof document === 'undefined') return;
+  if (!credentials || !pollingRequested || typeof document === 'undefined') {
+    return;
+  }
   if (document.visibilityState !== 'visible') return;
 
   pollTimer = setInterval(() => {
@@ -360,17 +392,19 @@ function stopPolling() {
 }
 
 function handleOnline() {
+  if (!pollingRequested || !credentials) return;
   syncNow('online').catch(() => {});
   startPolling();
 }
 
 function handleFocus() {
+  if (!pollingRequested || !credentials) return;
   syncNow('focus').catch(() => {});
 }
 
 function handleVisibility() {
-  if (document.visibilityState === 'visible') {
-    syncNow('visible').catch(() => {});
+  if (document.visibilityState === 'visible' && pollingRequested) {
+    if (credentials) syncNow('visible').catch(() => {});
     startPolling();
   } else {
     stopPolling();
