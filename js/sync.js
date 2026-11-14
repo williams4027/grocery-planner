@@ -86,6 +86,15 @@ export function setSyncPollingActive(active) {
   syncNow('more').catch(() => {});
 }
 
+/**
+ * Best-effort sync triggered when the user switches bottom tabs. Polling stays
+ * tied to the More screen, so this only runs a single check.
+ */
+export function syncOnTabNavigation() {
+  if (!SYNC_BASE || !credentials) return;
+  syncNow('tab').catch(() => {});
+}
+
 export async function initSync() {
   if (initialized) return getStatus();
   initialized = true;

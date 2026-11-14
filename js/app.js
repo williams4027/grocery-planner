@@ -3,7 +3,7 @@
 import { APP_NAME } from './config.js';
 import * as store from './store.js';
 import { initPwa } from './pwa.js';
-import { initSync } from './sync.js';
+import { initSync, syncOnTabNavigation } from './sync.js';
 import { mount as mountPlan } from './views/plan.js';
 import { mount as mountList } from './views/list.js';
 import { mount as mountRecipes } from './views/recipes.js';
@@ -100,7 +100,10 @@ async function boot() {
 }
 
 window.addEventListener('hashchange', () => {
-  if (started && routeFromHash()) render();
+  if (!started || !routeFromHash()) return;
+  render();
+  // Switching bottom tabs pulls the latest shared state, just like opening More.
+  if (activeRoute !== 'more') syncOnTabNavigation();
 });
 
 window.addEventListener('online', updateNetworkStatus);
