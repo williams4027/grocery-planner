@@ -171,7 +171,10 @@ function compareRecipes(a, b) {
   const categoryA = RECIPE_CATEGORY_ORDER.get(a.category) ?? RECIPE_CATEGORIES.length;
   const categoryB = RECIPE_CATEGORY_ORDER.get(b.category) ?? RECIPE_CATEGORIES.length;
   if (categoryA !== categoryB) return categoryA - categoryB;
-  return compareRecipePosition(a, b);
+  return (
+    a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }) ||
+    compareRecipePosition(a, b)
+  );
 }
 
 function nextRecipePosition(category) {
@@ -288,32 +291,6 @@ export function duplicateRecipe(recipeId) {
   state.recipes.push(copy);
   commit();
   return copy;
-}
-
-/** Moves a recipe one place up or down inside its category. */
-export function moveRecipe(recipeId, direction) {
-  const recipe = getRecipe(recipeId);
-  if (!recipe) return false;
-
-  const step = Number(direction) < 0 ? -1 : 1;
-  const group = state.recipes
-    .filter((entry) => !entry.deletedAt && entry.title && entry.category === recipe.category)
-    .sort(compareRecipePosition);
-  const index = group.findIndex((entry) => entry.id === recipe.id);
-  const targetIndex = index + step;
-  if (index === -1 || targetIndex < 0 || targetIndex >= group.length) return false;
-
-  [group[index], group[targetIndex]] = [group[targetIndex], group[index]];
-
-  const timestamp = nowIso();
-  group.forEach((entry, position) => {
-    entry.position = position;
-    if (entry.id === recipe.id || entry.id === group[index].id) {
-      entry.updatedAt = timestamp;
-    }
-  });
-  commit();
-  return true;
 }
 
 export function addRecipeToList(recipeId, listId) {

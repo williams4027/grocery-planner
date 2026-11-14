@@ -155,8 +155,8 @@ PLAN.md                 product plan, data model, phase breakdown
   ingredient lines, including quantities; ingredient lines like “2 cups chopped carrots” are split
   into quantity, unit, and item name automatically. In the recipe detail, each ingredient has an
   **Aisle** selector; changes save immediately and carry through when you add the recipe to a list
-  or edit its ingredient lines. Use **Move up** and **Move down** to set the order inside a
-  category, or **Duplicate** to create a copy directly after the original. Recipe-level serving
+  or edit its ingredient lines. Use **Duplicate** to create a copy directly after the original.
+  Recipes are listed alphabetically within each category. Recipe-level serving
   scaling is deferred; the meal plan still scales by planned servings.
 - **Plan meals as one continuous list**, without days or slots. Add the same recipe more than once,
   set servings, or type a custom meal like “Leftovers.” Choosing a recipe adds its ingredients to
