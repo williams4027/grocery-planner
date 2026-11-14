@@ -39,7 +39,16 @@
             <span class="brand__mark" aria-hidden="true">GP</span>
             <span class="brand__name">Grocery Planner</span>
           </div>
-          <p id="net-status" class="status" role="status" hidden>Offline</p>
+          <div class="topbar__actions">
+            <p id="net-status" class="status" role="status" hidden>Offline</p>
+            <a class="topbar__more" href="#/more" data-route="more" aria-label="More and settings">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <circle cx="12" cy="12" r="8.5" />
+                <path d="M12 11v5.5M12 7.6v.2" />
+              </svg>
+              <span>More</span>
+            </a>
+          </div>
         </div>
       </header>
 
@@ -71,12 +80,12 @@
             </svg>
             <span>Recipes</span>
           </a>
-          <a href="#/more" data-route="more">
+          <a href="#/ideas" data-route="ideas">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <circle cx="12" cy="12" r="8.5" />
-              <path d="M12 11v5.5M12 7.6v.2" />
+              <path d="M9 18h6M10 21h4" />
+              <path d="M12 3a6 6 0 0 0-3.5 10.9c.5.4.8 1 .8 1.6V16h5.4v-.5c0-.6.3-1.2.8-1.6A6 6 0 0 0 12 3Z" />
             </svg>
-            <span>More</span>
+            <span>Ideas</span>
           </a>
         </div>
       </nav>

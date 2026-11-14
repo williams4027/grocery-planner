@@ -11,7 +11,7 @@ sync between two phones. Hosted free on GitHub Pages.
   manual JSON export/import still works as a backup and fallback
 
 **Status:** Phases 0–6 implemented, plus per-store lists, Google Calendar trip export, recipe
-ordering/duplication, weekly meal planning, `.ics` calendar export, JSON backup/restore, bulk list
+ordering/duplication, a continuous meal plan, a future-meal ideas page, JSON backup/restore, bulk list
 actions, alphabetical aisle sorting, a Google Drive backup search shortcut, factory reset to
 seeded data, a double-tap zoom guard, rotating heart-filled acknowledgements, and optional
 end-to-end encrypted two-phone sync.
@@ -59,27 +59,32 @@ end-to-end encrypted two-phone sync.
 | Object | Purpose |
 | --- | --- |
 | **Recipe** | Title, servings, ingredient lines, steps, tags, optional source URL. |
-| **Meal plan entry** | Date + slot (breakfast/lunch/dinner) + recipe or free text + servings. |
+| **Meal plan entry** | Recipe or free text + servings. One continuous list, no day or slot. |
+| **Meal ideas** | Free-form notes for meals to plan in future weeks. |
 | **Grocery list** | Named list of items with aisle, quantity, checked state, notes; optionally tied to a store layout. |
 | **Settings** | Aisle order, active list, week start, theme, last-backup reminder. |
 
 ### Main screens (hash routes)
-1. `#/plan` — current week grid (7 days × 3 slots), tap a slot to assign a recipe or text.
+1. `#/plan` — continuous meal list, tap a meal to edit servings or swap the recipe, add recipes
+   directly to the active grocery list, or clear the meal list.
 2. `#/list` — active grocery list in shopping mode: grouped by aisle, big checkboxes, sticky
    aisle headers, running "x of y picked" counter. Store chips switch between Kroger, Whole Foods,
    Costco, and custom lists.
 3. `#/recipes` — recipe list, search/filter, detail, add-to-list, and create form.
-4. `#/list` → **Manage lists** sheet — create, duplicate, archive, and restore lists.
-5. `#/more` — build info, backup/restore, install help, roadmap, data counts.
+4. `#/ideas` — free-form notes for future-week meal ideas.
+5. `#/list` → **Manage lists** sheet — create, duplicate, archive, and restore lists.
+6. `#/more` — build info, backup/restore, install help, roadmap, data counts. Linked from the top
+   right of the header.
 
-Bottom tab bar for Plan / List / Recipes / More.
+Bottom tab bar for Plan / List / Recipes / Ideas.
 
 ### Signature flows
-- **Plan → shop:** choosing a recipe for a slot immediately adds its ingredients to the selected
-  list, scaled by `planned servings / recipe servings`. Each item keeps `sourceRecipeId` plus
+- **Plan → shop:** choosing a recipe immediately adds its ingredients to the selected list, scaled
+  by `planned servings / recipe servings`. Each item keeps `sourceRecipeId` plus
   `sourcePlanEntryId` or per-entry `planContributions`, so changing or clearing that meal can remove
   only its unchecked share without touching checked ones. Custom/free-text meals stay on the plan
-  without adding ingredients.
+  without adding ingredients. Each planned meal has its own id, so the same recipe can be planned
+  more than once.
 - **Shop:** check items off one-handed; checked items sink to the bottom of their aisle; list
   survives app kill and offline reloads.
 - **Share:** export produces `grocery-planner-backup-YYYY-MM-DD.json`; use the system share sheet
@@ -96,8 +101,8 @@ Bottom tab bar for Plan / List / Recipes / More.
 {
   "format": "grocery-planner-backup",
   "formatVersion": 1,
-  "schemaVersion": 2,
-  "appVersion": "0.10.2",
+  "schemaVersion": 3,
+  "appVersion": "0.11.0",
   "exportedAt": "2026-10-22T15:00:00.000Z",
   "state": {
     "recipes": [{
@@ -107,13 +112,16 @@ Bottom tab bar for Plan / List / Recipes / More.
       "createdAt": "...", "updatedAt": "...", "deletedAt": null
     }],
     "plan": [{
-      "id": "pln_1", "date": "2026-10-26", "slot": "dinner",
-      "recipeId": "rcp_1", "title": "Sheet-pan chicken", "servings": 4,
+      "id": "pln_1", "recipeId": "rcp_1", "title": "Sheet-pan chicken", "servings": 4,
       "createdAt": "...", "updatedAt": "..."
     }],
     "planTombstones": [{
-      "date": "2026-10-27", "slot": "dinner", "deletedAt": "..."
+      "id": "pln_1", "deletedAt": "..."
     }],
+    "ideas": {
+      "text": "Try the lentil soup next week\nTacos for Friday",
+      "updatedAt": "..."
+    },
     "lists": [{
       "id": "lst_1", "name": "Costco", "storeKey": "costco",
       "aisleOrder": ["Household", "Pantry", "Frozen", "Dairy", "Deli", "Meat & Seafood", "Produce", "Bakery", "Other"],
@@ -190,7 +198,7 @@ Everything else (Node 14, npm, Safari) is fine for this stack, since there is no
 │   ├── config.js           # name, version, schema version, aisles, store presets, storage keys
 │   ├── model.js            # factories, aisle keywords, normalization
 │   ├── dates.js            # local date keys, week starts, day arithmetic
-│   ├── calendar.js         # Google Calendar details, URL builder, and .ics export (pure)
+│   ├── calendar.js         # Google Calendar details and URL builder (pure)
 │   ├── backup.js           # JSON backup format, validation, restore
 │   ├── merge.js            # deterministic per-entity merge for sync
 │   ├── sync.js             # encrypted relay client, polling, snapshots
@@ -199,7 +207,7 @@ Everything else (Node 14, npm, Safari) is fine for this stack, since there is no
 │   ├── sheet.js            # shared bottom-sheet dialog controller
 │   ├── pwa.js              # service worker registration, update checks
 │   ├── ui.js               # tiny DOM helpers, icons, toast
-│   └── views/              # plan.js, list.js, recipes.js, more.js
+│   └── views/              # plan.js, list.js, recipes.js, ideas.js, more.js
 ├── scripts/
 │   ├── make-icons.cjs      # generates PNG icons
 │   └── test-merge.cjs      # deterministic merge tests
@@ -255,8 +263,9 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 ### Phase 2 — Backup/restore + shopping polish (done, v0.8.0)
 - **Export/import v1:** download JSON, import with Replace only; validation + error messages.
 - Settings screen with data counts, export button, and last-backup timestamp.
-- Backup files include every list, item, recipe, planned meal, and setting; restores show a summary
-  and require confirmation. Corrupt or newer-version files are rejected atomically.
+- Backup files include every list, item, recipe, planned meal, meal-idea note, and setting;
+  restores show a summary and require confirmation. Corrupt or newer-version files are rejected
+  atomically.
 - Shopping mode polish: 44px+ targets, checked items dim and sink, per-aisle progress, undo on
   delete, swipe-free (buttons only).
 - Multiple lists: duplicate (including checked items), archive without deleting data, and restore
@@ -327,16 +336,16 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
 - **Accept:** edit a seeded recipe, reorder it, duplicate it, and add its ingredients to a chosen
   list offline. Done.
 
-### Phase 4 — Weekly meal plan (done, v0.7.0; .ics export added v0.9.4)
-- Week view: 7 days × 3 slots, prev/next week, "today" jump; assign recipe or free text.
-- Servings per entry; copy last week into empty slots; clear day.
+### Phase 4 — Continuous meal plan (done, v0.7.0; simplified v0.11.0)
+- One continuous meal list: no days or slots, so the same recipe can be planned more than once.
+- Servings per entry; tap a meal to swap the recipe or edit a custom meal; clear the whole list
+  without removing ingredients already on a grocery list.
 - Choosing a recipe automatically adds scaled ingredients to the selected list with
   `sourceRecipeId` and per-meal quantity contributions. Updating or clearing a meal removes only
   that meal's unchecked share; checked items are kept.
-- **Download .ics:** export the visible week as all-day calendar events for Apple or Google
-  Calendar. The file is built locally; nothing is uploaded.
-- **Accept:** plan 5 dinners, see their ingredients on the chosen list, shop, check off; plan
-  persists offline. Export the week, import the `.ics` file, and see the meals on a calendar. Done.
+- **Ideas** tab keeps free-form notes for future weeks; synced and backed up with the rest of state.
+- **Accept:** plan 5 meals, see their ingredients on the chosen list, shop, and check off; the plan
+  persists offline. Clear the meal list and confirm the grocery list is untouched. Done.
 
 ### Phase 5 — Shared-folder backup handoff (done, v0.9.4)
 - Supported multi-device workflow: keep the latest `grocery-planner-backup-YYYY-MM-DD.json` in a
@@ -404,7 +413,7 @@ No framework. Each view exports `mount(root)` and returns an optional cleanup fu
   resolves ties deterministically, and pushes with `If-Match: <rev>`. A `409` triggers a re-read
   and retry. Lists, items, recipes, plan entries, and the shared settings merge; device-local
   settings (active list, theme, keep-awake, backup time, migration markers) stay on the phone.
-- **Plan deletions:** `planTombstones` record deleted date/slot pairs so clearing a meal on one
+- **Plan deletions:** `planTombstones` record deleted meal ids so clearing a meal on one
   phone is not resurrected by the other. Schema version is now 2; backups understand tombstones.
 - **Polling:** the app checks the revision once a minute while More is open and pushes about 1.5
   seconds after a local edit from any screen. Sync pauses offline and resumes when More is visible

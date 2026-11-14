@@ -65,14 +65,11 @@ function compareCreated(a, b) {
 }
 
 function comparePlan(a, b) {
-  if (a.date !== b.date) return a.date.localeCompare(b.date);
-  if (a.slot !== b.slot) return a.slot.localeCompare(b.slot);
-  return String(a.id).localeCompare(String(b.id));
+  return compareCreated(a, b);
 }
 
 function compareTombstone(a, b) {
-  if (a.date !== b.date) return a.date.localeCompare(b.date);
-  return a.slot.localeCompare(b.slot);
+  return String(a.id).localeCompare(String(b.id));
 }
 
 function latestIso(a, b) {
@@ -145,9 +142,8 @@ function mergePlan(localState, remoteState) {
   const live = new Map();
 
   for (const entry of [...(localState.plan || []), ...(remoteState.plan || [])]) {
-    if (!entry || !entry.date || !entry.slot) continue;
-    const key = `${entry.date}:${entry.slot}`;
-    live.set(key, pickNewer(live.get(key), entry));
+    if (!entry || !entry.id) continue;
+    live.set(entry.id, pickNewer(live.get(entry.id), entry));
   }
 
   const tombstones = new Map();
@@ -155,23 +151,28 @@ function mergePlan(localState, remoteState) {
     ...(localState.planTombstones || []),
     ...(remoteState.planTombstones || []),
   ]) {
-    if (!tombstone || !tombstone.date || !tombstone.slot) continue;
-    const key = `${tombstone.date}:${tombstone.slot}`;
-    tombstones.set(key, pickNewer(tombstones.get(key), tombstone));
+    if (!tombstone || !tombstone.id) continue;
+    tombstones.set(tombstone.id, pickNewer(tombstones.get(tombstone.id), tombstone));
   }
 
-  for (const [key, tombstone] of [...tombstones.entries()]) {
-    const entry = live.get(key);
+  for (const [id, tombstone] of [...tombstones.entries()]) {
+    const entry = live.get(id);
     if (!entry) continue;
 
-    if (tombstone.deletedAt >= entry.updatedAt) live.delete(key);
-    else tombstones.delete(key);
+    if (tombstone.deletedAt >= entry.updatedAt) live.delete(id);
+    else tombstones.delete(id);
   }
 
   return {
     plan: [...live.values()].sort(comparePlan),
     planTombstones: [...tombstones.values()].sort(compareTombstone),
   };
+}
+
+function mergeIdeas(localIdeas, remoteIdeas) {
+  const newer = pickNewer(localIdeas || null, remoteIdeas || null);
+  if (!newer) return null;
+  return newer;
 }
 
 function mergeSettings(localSettings, remoteSettings) {
@@ -207,6 +208,7 @@ export function mergeStates(local, remote) {
     recipes: mergeRecipes(local.recipes || [], remote.recipes || []),
     plan: plan.plan,
     planTombstones: plan.planTombstones,
+    ideas: mergeIdeas(local.ideas, remote.ideas),
     settings: mergeSettings(local.settings, remote.settings),
   });
 }

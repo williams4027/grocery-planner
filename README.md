@@ -16,11 +16,11 @@ be installed from Safari on an iPhone.
   (the `williams4027.github.io` URL redirects there).
 
 Status: **All core features are complete** — per-store lists, Google Calendar trip export, seeded
-recipes with ordering and duplication, backup and restore, weekly meal planning with `.ics` export,
-shopping/list-management polish, quantity merging, cross-list moves, a Google Drive backup search
-shortcut, factory reset to seeded data, a guard against accidental double-tap zoom, rotating
-heart-filled acknowledgements, and optional end-to-end encrypted sync between two phones. See
-[PLAN.md](./PLAN.md) for the roadmap and optional backlog.
+recipes with ordering and duplication, backup and restore, a continuous meal-plan list, a free-form
+ideas page for future weeks, shopping/list-management polish, quantity merging, cross-list moves, a
+Google Drive backup search shortcut, factory reset to seeded data, a guard against accidental
+double-tap zoom, rotating heart-filled acknowledgements, and optional end-to-end encrypted sync
+between two phones. See [PLAN.md](./PLAN.md) for the roadmap and optional backlog.
 
 ## Quick start
 
@@ -100,7 +100,7 @@ js/config.js            app name, version, schema version, aisles, store presets
 js/model.js             factories, aisle keyword map, ingredient parsing, normalization
 js/dates.js             local date keys, week starts, and day arithmetic
 js/backup.js            JSON backup format, parsing, and validation
-js/calendar.js          pure Google Calendar trip-detail, URL, and .ics builders
+js/calendar.js          pure Google Calendar trip-detail and URL builders
 js/store.js             state container, IndexedDB/localStorage persistence, actions
 js/merge.js             deterministic per-entity merge for sync
 js/sync.js              encrypted relay client, polling, snapshots, disconnect
@@ -108,7 +108,7 @@ js/seed-recipes.js      recipes seeded from the meal-planning sheet
 js/sheet.js             shared bottom-sheet dialog controller
 js/ui.js                DOM helper, icons, toast
 js/pwa.js               service worker registration and update checks
-js/views/               plan.js, list.js, recipes.js, more.js
+js/views/               plan.js, list.js, recipes.js, ideas.js, more.js
 dev-server.cjs          zero-dependency static server
 scripts/make-icons.cjs  generates PNG icons (no image tooling required)
 scripts/test-merge.cjs  deterministic merge tests
@@ -158,12 +158,16 @@ PLAN.md                 product plan, data model, phase breakdown
   or edit its ingredient lines. Use **Move up** and **Move down** to set the order inside a
   category, or **Duplicate** to create a copy directly after the original. Recipe-level serving
   scaling is deferred; the meal plan still scales by planned servings.
-- **Plan a week of meals** in a 7-day × 3-slot grid. Move between weeks, jump back to today, set
-  servings, copy last week into empty slots, or clear a day. Choosing a recipe adds its ingredients
-  to the selected list automatically, scaled to the planned servings. Meals that share an
-  ingredient keep one combined row; updating or clearing a meal removes only that meal’s share of
-  the quantity. Items you already checked off are kept. **Download .ics** exports the visible week
-  as all-day events for Apple or Google Calendar; the file is built locally and never uploaded.
+- **Plan meals as one continuous list**, without days or slots. Add the same recipe more than once,
+  set servings, or type a custom meal like “Leftovers.” Choosing a recipe adds its ingredients to
+  the selected store list automatically, scaled to the planned servings. Meals that share an
+  ingredient keep one combined row; removing one meal removes only its share of the quantity.
+  Items you already checked off are kept. **Clear** empties the meal list and leaves the grocery
+  list untouched.
+- Keep **future meal ideas** in the **Ideas** tab. It is a free-form notes page for dishes, links,
+  or rough plans for upcoming weeks; notes save automatically and are included in backups and sync.
+  **More** lives in the top-right corner of the header, leaving Plan, List, Recipes, and Ideas in
+  the bottom bar.
 - Planning a recipe or manually adding a list item shows a rotating, heart-filled thank-you toast.
   The phrase rotation is stored only on the device and never leaves it.
 - Everything persists in IndexedDB on the device, survives force-quit, and works offline.

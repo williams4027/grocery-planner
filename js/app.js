@@ -7,12 +7,14 @@ import { initSync } from './sync.js';
 import { mount as mountPlan } from './views/plan.js';
 import { mount as mountList } from './views/list.js';
 import { mount as mountRecipes } from './views/recipes.js';
+import { mount as mountIdeas } from './views/ideas.js';
 import { mount as mountMore } from './views/more.js';
 
 const routes = {
   plan: { title: 'Plan', mount: mountPlan },
   list: { title: 'List', mount: mountList },
   recipes: { title: 'Recipes', mount: mountRecipes },
+  ideas: { title: 'Ideas', mount: mountIdeas },
   more: { title: 'More', mount: mountMore },
 };
 
@@ -63,7 +65,7 @@ function render() {
 }
 
 function updateTabs(activeKey) {
-  document.querySelectorAll('.tabbar a').forEach((link) => {
+  document.querySelectorAll('.tabbar a, .topbar [data-route]').forEach((link) => {
     if (link.dataset.route === activeKey) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
   });

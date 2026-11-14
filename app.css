@@ -184,6 +184,44 @@ a {
   text-transform: uppercase;
 }
 
+.topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.topbar__more {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 650;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.topbar__more svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.topbar__more[aria-current="page"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 .main {
   flex: 1;
   width: 100%;
@@ -2342,32 +2380,32 @@ body.sheet-open {
   margin-bottom: 14px;
 }
 
-.plan-week__heading h2 {
+.plan-heading h2 {
   margin: 0;
   font-size: 20px;
   letter-spacing: -0.02em;
 }
 
-.plan-week__range {
+.plan-heading__note {
   margin: 2px 0 0;
   color: var(--muted);
   font-size: 13px;
 }
 
-.plan-week__nav {
-  display: flex;
+.plan-add-btn {
   flex: none;
-  gap: 6px;
-}
-
-.plan-week__prev svg {
-  transform: scaleX(-1);
-}
-
-.plan-today-btn {
   min-height: 40px;
-  padding: 8px 12px;
-  font-size: 13px;
+  padding: 8px 14px;
+  font-size: 14px;
+}
+
+.plan-add-btn svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
 }
 
 .plan-target {
@@ -2398,161 +2436,66 @@ body.sheet-open {
   line-height: 1.4;
 }
 
-.plan-week {
+.plan-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
-.plan-day {
-  overflow: hidden;
+.plan-meal {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 13px 14px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--bg);
-}
-
-.plan-day.is-today {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-}
-
-.plan-day__head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  background: var(--surface-2);
-}
-
-.plan-day__title {
-  min-width: 0;
-  margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-}
-
-.plan-day__title span {
-  color: var(--muted);
-  font-weight: 600;
-}
-
-.plan-day__today {
-  flex: none;
-  padding: 2px 7px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.plan-day__clear {
-  min-height: 32px;
-  margin-left: auto;
-  padding: 4px 8px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.plan-day__clear:hover {
-  background: var(--surface);
-  color: var(--danger);
-}
-
-.plan-day__slots {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.plan-slot {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-height: 76px;
-  padding: 9px 9px 10px;
-  border: 0;
-  border-top: 1px solid var(--line);
-  background: transparent;
   color: var(--text);
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 
-.plan-slot + .plan-slot {
-  border-left: 1px solid var(--line);
-}
-
-.plan-slot:hover {
+.plan-meal:hover {
+  border-color: var(--accent);
   background: var(--accent-soft);
 }
 
-.plan-slot__label {
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.plan-slot__body {
+.plan-meal__body {
   display: grid;
-  gap: 2px;
+  gap: 3px;
+  flex: 1;
   min-width: 0;
-  padding-right: 12px;
 }
 
-.plan-slot__meal {
-  display: -webkit-box;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 500;
+.plan-meal__title {
+  font-size: 15px;
+  font-weight: 650;
   line-height: 1.3;
   overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
-.plan-slot.is-filled .plan-slot__meal {
-  color: var(--text);
-  font-weight: 600;
-}
-
-.plan-slot__meta {
-  overflow: hidden;
+.plan-meal__meta {
   color: var(--muted);
-  font-size: 11px;
-  line-height: 1.3;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
-.plan-slot__meta--warn {
+.plan-meal__meta--warn {
   color: var(--danger);
 }
 
-.plan-slot__action {
-  position: absolute;
-  top: 8px;
-  right: 7px;
+.plan-meal__action {
+  flex: none;
+  width: 18px;
+  height: 18px;
   color: var(--muted);
-  font-size: 16px;
-  line-height: 1;
 }
 
-.plan-slot__action svg {
-  width: 14px;
-  height: 14px;
+.plan-meal__action svg {
+  width: 18px;
+  height: 18px;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
@@ -2560,17 +2503,32 @@ body.sheet-open {
   stroke-linejoin: round;
 }
 
-.plan-week__footer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 14px;
-  margin-top: 14px;
+.plan-empty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 26px 16px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  text-align: center;
 }
 
-.plan-week__footer .card__note {
-  flex: 1 1 220px;
+.plan-empty__title {
   margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.plan-empty__note {
+  max-width: 34ch;
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.plan-list__note {
+  margin: 14px 0 0;
 }
 
 .plan-sheet .sheet__head {
@@ -2724,33 +2682,60 @@ body.sheet-open {
   margin-top: 12px;
 }
 
+/* ---------- Meal ideas ---------- */
+
+.ideas-card {
+  display: grid;
+  gap: 10px;
+}
+
+.ideas-text {
+  width: 100%;
+  min-height: 48vh;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.ideas-text:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.ideas-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ideas-count {
+  margin-left: auto;
+}
+
 @media (max-width: 380px) {
   .plan-card {
     padding-right: 12px;
     padding-left: 12px;
   }
 
-  .plan-slot {
-    padding: 8px 7px 9px;
+  .plan-card__head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
   }
 
-  .plan-slot__label {
-    padding-right: 13px;
-    font-size: 9px;
-    letter-spacing: 0.03em;
-  }
-
-  .plan-slot__meal {
-    font-size: 12px;
-  }
-
-  .plan-slot__meta {
-    font-size: 10px;
-  }
-
-  .plan-slot__action {
-    top: 7px;
-    right: 5px;
+  .plan-add-btn {
+    width: 100%;
   }
 }
 

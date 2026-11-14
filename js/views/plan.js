@@ -1,39 +1,11 @@
-/* Meal plan — 7 days x 3 slots with automatic list additions. */
+/* Meal plan — one continuous meal list that feeds the active grocery list. */
 
-import { PLAN_SLOTS, PLAN_SLOT_LABELS } from '../config.js';
 import * as store from '../store.js';
-import { buildPlanIcs } from '../calendar.js';
-import {
-  addDays,
-  fromDateKey,
-  startOfWeek,
-  toDateKey,
-} from '../dates.js';
 import { createSheetController } from '../sheet.js';
 import { h, icon, ICONS, showCheer, showToast } from '../ui.js';
 
-const WEEKDAY = new Intl.DateTimeFormat(undefined, { weekday: 'long' });
-const MONTH_DAY = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
-const LONG_DATE = new Intl.DateTimeFormat(undefined, {
-  weekday: 'long',
-  month: 'long',
-  day: 'numeric',
-});
-
 function countLabel(count, singular, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
-}
-
-function formatWeekRange(start, end) {
-  if (start.getFullYear() !== end.getFullYear()) {
-    return `${MONTH_DAY.format(start)}, ${start.getFullYear()} – ${MONTH_DAY.format(end)}, ${end.getFullYear()}`;
-  }
-
-  if (start.getMonth() === end.getMonth()) {
-    return `${MONTH_DAY.format(start)} – ${end.getDate()}, ${end.getFullYear()}`;
-  }
-
-  return `${MONTH_DAY.format(start)} – ${MONTH_DAY.format(end)}, ${end.getFullYear()}`;
 }
 
 function clampServings(value) {
@@ -43,10 +15,7 @@ function clampServings(value) {
 }
 
 export function mount(root) {
-  const weekStart = store.getState().settings.weekStart === 'mon' ? 'mon' : 'sun';
-  let anchor = startOfWeek(new Date(), weekStart);
-  let selectedDate = null;
-  let selectedSlot = null;
+  let selectedEntryId = null;
   let selectedTrigger = null;
   let planMode = 'pick';
 
@@ -57,40 +26,23 @@ export function mount(root) {
         <p class="list-count" id="plan-count" aria-live="polite"></p>
       </div>
       <div class="page-head__actions">
-        <button class="btn plan-today-btn" id="plan-today" type="button">Today</button>
+        <button class="ghost-btn" id="plan-clear" type="button">Clear</button>
       </div>
     </header>
 
     <p class="lede">
-      Pick a recipe for any slot and its ingredients go straight to your chosen list.
+      Pick meals as you plan the week. Their ingredients go straight to the list you’ll shop from.
     </p>
 
-    <section class="card plan-card" aria-labelledby="week-title">
+    <section class="card plan-card" aria-labelledby="meals-title">
       <div class="card__head plan-card__head">
-        <div class="plan-week__heading">
-          <h2 id="week-title">This week</h2>
-          <p id="week-range" class="plan-week__range"></p>
+        <div class="plan-heading">
+          <h2 id="meals-title">Meals</h2>
+          <p class="plan-heading__note">A running list for the next shopping trip.</p>
         </div>
-        <div class="plan-week__nav" role="group" aria-label="Week navigation">
-          <button
-            class="icon-btn plan-week__prev"
-            id="week-prev"
-            type="button"
-            aria-label="Previous week"
-            title="Previous week"
-          >
-            ${ICONS.chevron}
-          </button>
-          <button
-            class="icon-btn"
-            id="week-next"
-            type="button"
-            aria-label="Next week"
-            title="Next week"
-          >
-            ${ICONS.chevron}
-          </button>
-        </div>
+        <button class="btn btn--primary plan-add-btn" id="plan-add" type="button">
+          ${ICONS.plus} Add meal
+        </button>
       </div>
 
       <div class="plan-target">
@@ -101,22 +53,18 @@ export function mount(root) {
         <p id="plan-target-note" class="card__note"></p>
       </div>
 
-      <div id="plan-week" class="plan-week"></div>
+      <div id="plan-list" class="plan-list"></div>
 
-      <div class="plan-week__footer">
-        <button class="btn" id="plan-copy" type="button">Copy last week</button>
-        <button class="btn" id="plan-ics" type="button">Download .ics</button>
-        <p class="card__note">
-          Copies into empty slots only. Custom meals stay on the plan and do not add ingredients.
-          The .ics file contains this week’s meals for Apple or Google Calendar.
-        </p>
-      </div>
+      <p class="card__note plan-list__note">
+        Tap a meal to change servings or swap the recipe. Removing a meal removes only its
+        unchecked ingredients.
+      </p>
     </section>
 
     <dialog id="plan-dialog" class="sheet plan-sheet" aria-labelledby="plan-dialog-title">
       <div class="sheet__handle" aria-hidden="true"></div>
       <div class="sheet__head">
-        <h2 id="plan-dialog-title">Plan meal</h2>
+        <h2 id="plan-dialog-title">Add a meal</h2>
         <button class="sheet__close" id="plan-dialog-close" type="button" aria-label="Close">
           ${ICONS.close}
         </button>
@@ -129,16 +77,11 @@ export function mount(root) {
 
   const refs = {
     count: root.querySelector('#plan-count'),
-    title: root.querySelector('#week-title'),
-    range: root.querySelector('#week-range'),
-    today: root.querySelector('#plan-today'),
-    prev: root.querySelector('#week-prev'),
-    next: root.querySelector('#week-next'),
+    clear: root.querySelector('#plan-clear'),
+    add: root.querySelector('#plan-add'),
     targetList: root.querySelector('#plan-target-list'),
     targetNote: root.querySelector('#plan-target-note'),
-    week: root.querySelector('#plan-week'),
-    copy: root.querySelector('#plan-copy'),
-    ics: root.querySelector('#plan-ics'),
+    list: root.querySelector('#plan-list'),
     dialog: root.querySelector('#plan-dialog'),
     dialogTitle: root.querySelector('#plan-dialog-title'),
     dialogContext: root.querySelector('#plan-dialog-context'),
@@ -149,13 +92,13 @@ export function mount(root) {
 
   const planSheet = createSheetController(refs.dialog, {
     trigger: () => {
-      if (selectedDate && selectedSlot) {
+      if (selectedEntryId) {
         const next = root.querySelector(
-          `[data-plan-date="${selectedDate}"][data-plan-slot="${selectedSlot}"]`
+          `[data-action="edit"][data-entry-id="${selectedEntryId}"]`
         );
         if (next) return next;
       }
-      return selectedTrigger && selectedTrigger.isConnected ? selectedTrigger : refs.week;
+      return selectedTrigger && selectedTrigger.isConnected ? selectedTrigger : refs.add;
     },
     initialFocus: () =>
       refs.dialogBody.querySelector('#plan-recipe-search') ||
@@ -182,160 +125,115 @@ export function mount(root) {
       : 'Create a grocery list first.';
   }
 
-  function weekEntries() {
-    const end = addDays(anchor, 6);
-    return store.getPlanEntriesInRange(toDateKey(anchor), toDateKey(end));
+  function emptyState() {
+    return h(
+      'div',
+      { class: 'plan-empty' },
+      h('p', { class: 'plan-empty__title' }, 'No meals planned yet'),
+      h(
+        'p',
+        { class: 'plan-empty__note' },
+        'Pick a recipe and its ingredients will be added to your grocery list.'
+      ),
+      h(
+        'button',
+        {
+          class: 'btn btn--primary',
+          type: 'button',
+          dataset: { action: 'add' },
+        },
+        'Add your first meal'
+      )
+    );
   }
 
-  function weekTitle() {
-    const currentStart = startOfWeek(new Date(), weekStart);
-    const currentKey = toDateKey(currentStart);
-    const thisKey = toDateKey(anchor);
+  function mealNode(entry) {
+    const recipe = entry.recipeId ? store.getRecipe(entry.recipeId) : null;
+    const title = recipe ? recipe.title : entry.title;
+    let meta = 'Custom meal';
 
-    if (thisKey === currentKey) return 'This week';
-    if (thisKey === toDateKey(addDays(currentStart, 7))) return 'Next week';
-    if (thisKey === toDateKey(addDays(currentStart, -7))) return 'Last week';
-    return `Week of ${MONTH_DAY.format(anchor)}`;
-  }
-
-  function renderWeek() {
-    const entries = weekEntries();
-    const end = addDays(anchor, 6);
-    const currentStart = startOfWeek(new Date(), weekStart);
-    const todayKey = toDateKey(new Date());
-    const entryMap = new Map(entries.map((entry) => [`${entry.date}:${entry.slot}`, entry]));
-
-    refs.title.textContent = weekTitle();
-    refs.range.textContent = formatWeekRange(anchor, end);
-    refs.today.hidden = toDateKey(anchor) === toDateKey(currentStart);
-    refs.count.textContent = entries.length
-      ? `${countLabel(entries.length, 'meal')} planned`
-      : 'Nothing planned this week';
-    refs.ics.disabled = !entries.length;
-
-    const fragment = document.createDocumentFragment();
-
-    for (let index = 0; index < 7; index += 1) {
-      const date = addDays(anchor, index);
-      const dateKey = toDateKey(date);
-      const dayEntries = entries.filter((entry) => entry.date === dateKey);
-      const isToday = dateKey === todayKey;
-
-      fragment.append(
-        h(
-          'section',
-          { class: `plan-day${isToday ? ' is-today' : ''}`, dataset: { date: dateKey } },
-          h(
-            'div',
-            { class: 'plan-day__head' },
-            h(
-              'h3',
-              { class: 'plan-day__title' },
-              `${WEEKDAY.format(date)} `,
-              h('span', {}, MONTH_DAY.format(date))
-            ),
-            isToday ? h('span', { class: 'plan-day__today' }, 'Today') : null,
-            dayEntries.length
-              ? h(
-                  'button',
-                  {
-                    class: 'plan-day__clear',
-                    type: 'button',
-                    dataset: { action: 'clear-day', date: dateKey },
-                    'aria-label': `Clear ${WEEKDAY.format(date)}`,
-                  },
-                  'Clear'
-                )
-              : null
-          ),
-          h(
-            'div',
-            { class: 'plan-day__slots' },
-            ...PLAN_SLOTS.map((slot) =>
-              slotNode(date, dateKey, slot, entryMap.get(`${dateKey}:${slot}`))
-            )
-          )
-        )
-      );
-    }
-
-    refs.week.replaceChildren(fragment);
-  }
-
-  function slotNode(date, dateKey, slot, entry) {
-    const label = PLAN_SLOT_LABELS[slot];
-    const recipe = entry && entry.recipeId ? store.getRecipe(entry.recipeId) : null;
-    const title = recipe ? recipe.title : entry ? entry.title : `Add ${label.toLowerCase()}`;
-    let meta = '';
-
-    if (entry) {
-      if (recipe) {
-        meta = `${countLabel(entry.servings, 'serving')} · ${countLabel(
-          recipe.ingredients.length,
-          'ingredient'
-        )}`;
-      } else if (entry.recipeId) {
-        meta = 'Recipe removed';
-      } else {
-        meta = 'Custom meal';
-      }
+    if (recipe) {
+      meta = `${recipe.category} · ${countLabel(
+        recipe.ingredients.length,
+        'ingredient'
+      )} · ${countLabel(entry.servings, 'serving')}`;
+    } else if (entry.recipeId) {
+      meta = 'Recipe removed';
     }
 
     return h(
       'button',
       {
-        class: `plan-slot${entry ? ' is-filled' : ''}`,
+        class: 'plan-meal',
         type: 'button',
-        dataset: { action: 'slot', planDate: dateKey, planSlot: slot },
-        'aria-label': entry
-          ? `Edit ${label.toLowerCase()} for ${WEEKDAY.format(date)}: ${title}`
-          : `Add ${label.toLowerCase()} for ${WEEKDAY.format(date)}`,
+        dataset: { action: 'edit', entryId: entry.id },
+        'aria-label': `Edit planned meal: ${title}`,
       },
-      h('span', { class: 'plan-slot__label' }, label),
       h(
         'span',
-        { class: 'plan-slot__body' },
-        h('span', { class: 'plan-slot__meal' }, title),
-        meta
-          ? h(
-              'span',
-              {
-                class: `plan-slot__meta${
-                  entry && entry.recipeId && !recipe ? ' plan-slot__meta--warn' : ''
-                }`,
-              },
-              meta
-            )
-          : null
+        { class: 'plan-meal__body' },
+        h('span', { class: 'plan-meal__title' }, title),
+        h(
+          'span',
+          {
+            class: `plan-meal__meta${
+              entry.recipeId && !recipe ? ' plan-meal__meta--warn' : ''
+            }`,
+          },
+          meta
+        )
       ),
-      h(
-        'span',
-        { class: 'plan-slot__action', 'aria-hidden': 'true' },
-        entry ? icon('chevron') : '+'
-      )
+      h('span', { class: 'plan-meal__action', 'aria-hidden': 'true' }, icon('chevron'))
     );
   }
 
-  function openSlot(dateKey, slot, trigger) {
-    selectedDate = dateKey;
-    selectedSlot = slot;
+  function renderPlan() {
+    const entries = store.getPlanEntries();
+
+    refs.count.textContent = entries.length
+      ? `${countLabel(entries.length, 'meal')} planned`
+      : 'Nothing planned yet';
+    refs.clear.disabled = !entries.length;
+    refs.list.replaceChildren(
+      ...(entries.length ? entries.map(mealNode) : [emptyState()])
+    );
+  }
+
+  function openPicker(trigger) {
+    selectedEntryId = null;
     selectedTrigger = trigger || null;
-    planMode = store.getPlanEntry(dateKey, slot) ? 'edit' : 'pick';
-    refs.dialogContext.textContent = `${LONG_DATE.format(
-      fromDateKey(dateKey)
-    )} · ${PLAN_SLOT_LABELS[slot]}`;
+    planMode = 'pick';
+    refs.dialogStatus.textContent = '';
+    renderDialog();
+    planSheet.open();
+  }
+
+  function openEdit(entryId, trigger) {
+    selectedEntryId = entryId;
+    selectedTrigger = trigger || null;
+    planMode = 'edit';
     refs.dialogStatus.textContent = '';
     renderDialog();
     planSheet.open();
   }
 
   function renderDialog() {
-    const entry = store.getPlanEntry(selectedDate, selectedSlot);
-    const label = PLAN_SLOT_LABELS[selectedSlot];
-    refs.dialogTitle.textContent = `Plan ${label.toLowerCase()}`;
+    const entry = selectedEntryId ? store.getPlanEntry(selectedEntryId) : null;
 
-    if (planMode === 'edit' && entry) renderEdit(entry);
-    else renderPicker(entry);
+    if (planMode === 'edit' && entry) {
+      refs.dialogTitle.textContent = 'Edit meal';
+      refs.dialogContext.textContent = entry.recipeId
+        ? 'Update servings, swap the recipe, or remove this meal.'
+        : 'Rename or remove this meal.';
+      renderEdit(entry);
+      return;
+    }
+
+    refs.dialogTitle.textContent = entry ? 'Change meal' : 'Add a meal';
+    refs.dialogContext.textContent = entry
+      ? 'Pick a replacement recipe or type a meal.'
+      : 'Pick a recipe or type your own meal.';
+    renderPicker(entry);
   }
 
   function renderEdit(entry) {
@@ -344,7 +242,9 @@ export function mount(root) {
     const title = recipe ? recipe.title : entry.title;
     const meta = recipe
       ? `${recipe.category} · ${countLabel(recipe.ingredients.length, 'ingredient')}`
-      : 'Custom meal';
+      : entry.recipeId
+        ? 'Recipe removed'
+        : 'Custom meal';
     const nodes = [
       h(
         'div',
@@ -538,8 +438,8 @@ export function mount(root) {
         'p',
         { class: 'card__note' },
         active
-          ? `Custom meals stay on the plan. Recipes add ingredients to ${active.name}.`
-          : 'Custom meals stay on the plan. Create a grocery list to add recipe ingredients.'
+          ? `Custom meals stay on the list. Recipes add ingredients to ${active.name}.`
+          : 'Custom meals stay on the list. Create a grocery list to add recipe ingredients.'
       )
     );
 
@@ -611,17 +511,16 @@ export function mount(root) {
     refs.dialogStatus.textContent = message;
   }
 
-  function planToast(result, verb = 'Planned') {
-    const date = fromDateKey(result.entry.date);
-    const day = date ? WEEKDAY.format(date) : 'that day';
-    let message = `${verb} ${day} ${PLAN_SLOT_LABELS[result.entry.slot].toLowerCase()}`;
+  function planToast(result, verb = 'Added') {
+    const title = result.recipe ? result.recipe.title : result.entry.title;
+    let message = `${verb} ${title}`;
 
     if (result.added) {
       message += ` · added ${countLabel(result.added, 'ingredient')} to ${result.list.name}`;
     }
     if (result.skipped) {
       message += ` · kept ${countLabel(result.skipped, 'checked item')}`;
-    } else if (!result.added && result.recipe.ingredients.length) {
+    } else if (!result.added && result.recipe && result.recipe.ingredients.length) {
       message += ' · checked items kept';
     }
 
@@ -638,26 +537,31 @@ export function mount(root) {
       return;
     }
 
-    const result = store.addRecipeToPlan({
-      date: selectedDate,
-      slot: selectedSlot,
-      recipeId: recipe.id,
-      servings: recipe.servings,
-      listId: active.id,
-    });
+    const result = selectedEntryId
+      ? store.updatePlanRecipe({
+          entryId: selectedEntryId,
+          recipeId: recipe.id,
+          servings: recipe.servings,
+          listId: active.id,
+        })
+      : store.addRecipeToPlan({
+          recipeId: recipe.id,
+          servings: recipe.servings,
+          listId: active.id,
+        });
 
     if (!result) {
-      setStatus('Could not add that recipe to the plan.');
+      setStatus('Could not add that meal.');
       return;
     }
 
     planSheet.close();
-    renderWeek();
+    renderPlan();
     showCheer('recipe', planToast(result));
   }
 
   function updatePlan() {
-    const entry = store.getPlanEntry(selectedDate, selectedSlot);
+    const entry = selectedEntryId ? store.getPlanEntry(selectedEntryId) : null;
     if (!entry || !entry.recipeId) return;
 
     const active = store.getActiveList();
@@ -668,9 +572,8 @@ export function mount(root) {
 
     const input = refs.dialogBody.querySelector('#plan-servings');
     const servings = clampServings(input ? input.value : entry.servings);
-    const result = store.addRecipeToPlan({
-      date: selectedDate,
-      slot: selectedSlot,
+    const result = store.updatePlanRecipe({
+      entryId: entry.id,
       recipeId: entry.recipeId,
       servings,
       listId: active.id,
@@ -682,7 +585,7 @@ export function mount(root) {
     }
 
     planSheet.close();
-    renderWeek();
+    renderPlan();
     showToast(planToast(result, 'Updated'));
   }
 
@@ -695,26 +598,22 @@ export function mount(root) {
       return;
     }
 
-    const result = store.setPlanMeal({
-      date: selectedDate,
-      slot: selectedSlot,
-      title,
-      servings: 1,
-    });
+    const existing = selectedEntryId ? store.getPlanEntry(selectedEntryId) : null;
+    const result = existing
+      ? store.updatePlanMeal({ entryId: existing.id, title, servings: 1 })
+      : store.addPlanMeal({ title, servings: 1 });
 
     if (!result) {
       setStatus('Could not save that meal.');
       return;
     }
 
-    const date = fromDateKey(selectedDate);
-    const day = date ? WEEKDAY.format(date) : 'that day';
     planSheet.close();
-    renderWeek();
+    renderPlan();
     showToast(
       result.removed
-        ? `Saved ${title} for ${day} · removed ${countLabel(result.removed, 'list item')}.`
-        : `Saved ${title} for ${day}.`
+        ? `Saved ${title} · removed ${countLabel(result.removed, 'list item')}.`
+        : `Saved ${title}.`
     );
   }
 
@@ -724,27 +623,25 @@ export function mount(root) {
   }
 
   function removePlan() {
-    const entry = store.getPlanEntry(selectedDate, selectedSlot);
+    const entry = selectedEntryId ? store.getPlanEntry(selectedEntryId) : null;
     if (!entry) return;
 
     const recipe = entry.recipeId ? store.getRecipe(entry.recipeId) : null;
     const title = recipe ? recipe.title : entry.title;
-    const date = fromDateKey(selectedDate);
-    const day = date ? WEEKDAY.format(date) : 'that day';
 
     if (
       !window.confirm(
-        `Remove “${title}” from ${day}? Unchecked ingredients added by this meal will be removed.`
+        `Remove “${title}” from the meal list? Unchecked ingredients added by this meal will be removed.`
       )
     ) {
       return;
     }
 
-    const result = store.clearPlanEntry(selectedDate, selectedSlot);
+    const result = store.removePlanEntry(entry.id);
     if (!result) return;
 
     planSheet.close();
-    renderWeek();
+    renderPlan();
     showToast(
       result.removed
         ? `Removed ${title} · removed ${countLabel(result.removed, 'list item')}.`
@@ -752,151 +649,42 @@ export function mount(root) {
     );
   }
 
-  function clearDay(dateKey) {
-    const entries = store.getPlanEntriesInDate(dateKey);
-    if (!entries.length) return;
+  function clearPlan() {
+    if (!store.getPlanEntries().length) return;
 
-    const date = fromDateKey(dateKey);
     if (
       !window.confirm(
-        `Clear ${WEEKDAY.format(date)}? Unchecked ingredients added by these meals will be removed.`
+        'Clear all planned meals? Ingredients already on your grocery list will stay.'
       )
     ) {
       return;
     }
 
-    const result = store.clearPlanDay(dateKey);
-    renderWeek();
+    const result = store.clearPlan();
+    renderPlan();
     showToast(
-      result.removed
-        ? `Cleared ${countLabel(result.cleared, 'meal')} · removed ${countLabel(
-            result.removed,
-            'list item'
-          )}.`
-        : `Cleared ${countLabel(result.cleared, 'meal')}.`
+      result.cleared
+        ? `Cleared ${countLabel(result.cleared, 'meal')}.`
+        : 'Meal list cleared.'
     );
   }
 
-  function copyLastWeek() {
-    const sourceStart = addDays(anchor, -7);
-    const source = store.getPlanEntriesInRange(
-      toDateKey(sourceStart),
-      toDateKey(addDays(sourceStart, 6))
-    );
-
-    if (!source.length) {
-      showToast('Last week has no meals to copy.');
-      return;
-    }
-
-    const occupied = new Set(weekEntries().map((entry) => `${entry.date}:${entry.slot}`));
-    const active = store.getActiveList();
-    let copied = 0;
-    let added = 0;
-    let skipped = 0;
-
-    for (const entry of source) {
-      const targetDate = toDateKey(addDays(fromDateKey(entry.date), 7));
-      const key = `${targetDate}:${entry.slot}`;
-      if (occupied.has(key)) continue;
-
-      let result = null;
-      if (entry.recipeId) {
-        result = store.addRecipeToPlan({
-          date: targetDate,
-          slot: entry.slot,
-          recipeId: entry.recipeId,
-          servings: entry.servings,
-          listId: active ? active.id : null,
-        });
-      }
-
-      if (!result) {
-        result = store.setPlanMeal({
-          date: targetDate,
-          slot: entry.slot,
-          title: entry.title,
-          servings: entry.servings,
-        });
-      }
-
-      if (!result) continue;
-      copied += 1;
-      if (result.added) added += result.added;
-      if (result.skipped) skipped += result.skipped;
-      occupied.add(key);
-    }
-
-    renderWeek();
-
-    if (!copied) {
-      showToast('Last week’s meals are already on this week.');
-      return;
-    }
-
-    let message = `Copied ${countLabel(copied, 'meal')}`;
-    if (added) {
-      message += ` · added ${countLabel(added, 'ingredient')} to ${
-        active ? active.name : 'your list'
-      }`;
-    }
-    if (skipped) message += ` · kept ${countLabel(skipped, 'checked item')}`;
-    showToast(`${message}.`);
-  }
-
-  refs.prev.addEventListener('click', () => {
-    anchor = addDays(anchor, -7);
-    renderWeek();
-  });
-
-  refs.next.addEventListener('click', () => {
-    anchor = addDays(anchor, 7);
-    renderWeek();
-  });
-
-  refs.today.addEventListener('click', () => {
-    anchor = startOfWeek(new Date(), weekStart);
-    renderWeek();
-  });
+  refs.add.addEventListener('click', () => openPicker(refs.add));
+  refs.clear.addEventListener('click', clearPlan);
 
   refs.targetList.addEventListener('change', () => {
     store.setActiveList(refs.targetList.value);
     renderTarget();
   });
 
-  refs.copy.addEventListener('click', copyLastWeek);
-
-  refs.ics.addEventListener('click', () => {
-    const entries = weekEntries();
-    if (!entries.length) return;
-
-    const recipeIds = [...new Set(entries.map((entry) => entry.recipeId).filter(Boolean))];
-    const recipes = recipeIds.map((recipeId) => store.getRecipe(recipeId)).filter(Boolean);
-    const payload = buildPlanIcs({
-      entries,
-      recipes,
-      calendarName: `Grocery Planner — week of ${toDateKey(anchor)}`,
-    });
-    const blob = new Blob([payload], { type: 'text/calendar;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `grocery-planner-meal-plan-${toDateKey(anchor)}.ics`;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-    showToast(`Exported ${countLabel(entries.length, 'meal')}.`);
-  });
-
-  refs.week.addEventListener('click', (event) => {
+  refs.list.addEventListener('click', (event) => {
     const button = event.target.closest('button[data-action]');
     if (!button) return;
 
-    if (button.dataset.action === 'slot') {
-      openSlot(button.dataset.planDate, button.dataset.planSlot, button);
-    } else if (button.dataset.action === 'clear-day') {
-      clearDay(button.dataset.date);
+    if (button.dataset.action === 'edit') {
+      openEdit(button.dataset.entryId, button);
+    } else if (button.dataset.action === 'add') {
+      openPicker(button);
     }
   });
 
@@ -940,7 +728,7 @@ export function mount(root) {
   });
 
   renderTarget();
-  renderWeek();
+  renderPlan();
 
   return () => {
     planSheet.destroy();

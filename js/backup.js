@@ -4,7 +4,7 @@
  * before replacing anything. Parsing is pure; the store owns the replacement.
  */
 
-import { PLAN_SLOTS, SCHEMA_VERSION, VERSION } from './config.js';
+import { SCHEMA_VERSION, VERSION } from './config.js';
 import { isValidDateKey } from './dates.js';
 import { normalizeState, nowIso, summarizeState } from './model.js';
 
@@ -64,12 +64,6 @@ function validatePlanEntry(entry, index) {
     throw invalid(`Planned meal ${index + 1} in that backup is not valid.`);
   }
 
-  const date = cleanName(entry.date);
-  const slot = cleanName(entry.slot).toLowerCase();
-  if (!isValidDateKey(date) || !PLAN_SLOTS.includes(slot)) {
-    throw invalid(`Planned meal ${index + 1} has an invalid date or slot.`);
-  }
-
   if (!cleanName(entry.recipeId) && !cleanName(entry.title)) {
     throw invalid(`Planned meal ${index + 1} is missing its recipe or meal name.`);
   }
@@ -87,10 +81,12 @@ function validatePlanTombstone(tombstone, index) {
     throw invalid(`Planned meal deletion ${index + 1} in that backup is not valid.`);
   }
 
-  const date = cleanName(tombstone.date);
-  const slot = cleanName(tombstone.slot).toLowerCase();
-  if (!isValidDateKey(date) || !PLAN_SLOTS.includes(slot)) {
-    throw invalid(`Planned meal deletion ${index + 1} has an invalid date or slot.`);
+  // Accept newer id-based tombstones and older date/slot tombstones from
+  // backups made before the meal list became continuous.
+  const id = cleanName(tombstone.id);
+  const legacy = isValidDateKey(cleanName(tombstone.date)) && cleanName(tombstone.slot);
+  if (!id && !legacy) {
+    throw invalid(`Planned meal deletion ${index + 1} is missing its meal id.`);
   }
 
   if (
@@ -98,6 +94,16 @@ function validatePlanTombstone(tombstone, index) {
     Number.isNaN(Date.parse(tombstone.deletedAt))
   ) {
     throw invalid(`Planned meal deletion ${index + 1} has an invalid timestamp.`);
+  }
+}
+
+function validateIdeas(ideas) {
+  if (typeof ideas === 'string') return;
+  if (!isObject(ideas)) {
+    throw invalid('That backup has invalid meal ideas.');
+  }
+  if (ideas.text !== undefined && typeof ideas.text !== 'string') {
+    throw invalid('That backup has invalid meal ideas.');
   }
 }
 
@@ -128,6 +134,8 @@ function validateState(state) {
     }
     state.planTombstones.forEach(validatePlanTombstone);
   }
+
+  if (state.ideas !== undefined) validateIdeas(state.ideas);
 
   if (state.settings !== undefined && !isObject(state.settings)) {
     throw invalid('That backup has invalid settings.');

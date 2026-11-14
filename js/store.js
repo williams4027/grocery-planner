@@ -10,10 +10,10 @@ import {
   createEmptyState,
   createItem,
   createList,
+  createPlanEntry,
   createPlanTombstone,
   createRecipe,
   normalizeAisleOrder,
-  normalizePlanEntry,
   normalizeQty,
   normalizeServings,
   normalizeState,
@@ -355,46 +355,23 @@ export function getPlanEntries() {
   return state.plan;
 }
 
-export function getPlanEntry(date, slot) {
-  return state.plan.find((entry) => entry.date === date && entry.slot === slot) || null;
+export function getPlanEntry(entryId) {
+  return state.plan.find((entry) => entry.id === entryId) || null;
 }
 
-export function getPlanEntriesInRange(startDate, endDate) {
-  return state.plan.filter((entry) => entry.date >= startDate && entry.date <= endDate);
-}
-
-export function getPlanEntriesInDate(date) {
-  return state.plan.filter((entry) => entry.date === date);
+function resolvePlanList(listId) {
+  return listId
+    ? state.lists.find((entry) => entry.id === listId && !entry.archivedAt)
+    : getActiveList();
 }
 
 /**
- * Plans a recipe in a date/slot and adds its ingredients to a list at the
- * planned servings. Unchecked items previously added by this plan entry are
- * replaced; checked items are kept.
+ * Adds a recipe's ingredients to the chosen list at the planned servings.
+ * Unchecked items previously added by this plan entry are replaced; checked
+ * items are kept. Each planned meal has its own id, so the same recipe can be
+ * planned more than once and its contributions stay separate.
  */
-export function addRecipeToPlan({
-  date,
-  slot,
-  recipeId,
-  servings = null,
-  listId = null,
-} = {}) {
-  const recipe = getRecipe(recipeId);
-  const list = listId
-    ? state.lists.find((entry) => entry.id === listId && !entry.archivedAt)
-    : getActiveList();
-  if (!recipe || !list) return null;
-
-  const plannedServings = normalizeServings(servings ?? recipe.servings);
-  const entry = upsertPlanEntry({
-    date,
-    slot,
-    recipeId: recipe.id,
-    title: recipe.title,
-    servings: plannedServings,
-  });
-  if (!entry) return null;
-
+function applyRecipeToPlan(entry, recipe, list, plannedServings) {
   const removed = removePlanItems(entry.id);
   const preserved = new Set(
     list.items
@@ -439,58 +416,114 @@ export function addRecipeToPlan({
   }
 
   if (added) touchList(list);
-  commit();
-
   return { entry, recipe, list, added, skipped, removed };
 }
 
-export function setPlanMeal({ date, slot, title, servings = 1 } = {}) {
+export function addRecipeToPlan({ recipeId, servings = null, listId = null } = {}) {
+  const recipe = getRecipe(recipeId);
+  const list = resolvePlanList(listId);
+  if (!recipe || !list) return null;
+
+  const plannedServings = normalizeServings(servings ?? recipe.servings);
+  const entry = createPlanEntry({
+    recipeId: recipe.id,
+    title: recipe.title,
+    servings: plannedServings,
+  });
+  state.plan.push(entry);
+
+  const result = applyRecipeToPlan(entry, recipe, list, plannedServings);
+  commit();
+  return result;
+}
+
+export function updatePlanRecipe({
+  entryId,
+  recipeId,
+  servings = null,
+  listId = null,
+} = {}) {
+  const entry = getPlanEntry(entryId);
+  const recipe = getRecipe(recipeId);
+  const list = resolvePlanList(listId);
+  if (!entry || !recipe || !list) return null;
+
+  const plannedServings = normalizeServings(
+    servings ?? entry.servings ?? recipe.servings
+  );
+  entry.recipeId = recipe.id;
+  entry.title = recipe.title;
+  entry.servings = plannedServings;
+  entry.updatedAt = nowIso();
+
+  const result = applyRecipeToPlan(entry, recipe, list, plannedServings);
+  commit();
+  return result;
+}
+
+export function addPlanMeal({ title, servings = 1 } = {}) {
   const cleanTitle = String(title || '')
     .trim()
     .replace(/\s+/g, ' ');
   if (!cleanTitle) return null;
 
-  const existing = getPlanEntry(date, slot);
-  const entry = upsertPlanEntry({
-    date,
-    slot,
-    recipeId: null,
-    title: cleanTitle,
-    servings,
-  });
-  if (!entry) return null;
+  const entry = createPlanEntry({ title: cleanTitle, servings });
+  state.plan.push(entry);
+  commit();
+  return { entry, removed: 0 };
+}
 
-  const removed = existing ? removePlanItems(existing.id) : 0;
+export function updatePlanMeal({ entryId, title, servings = null } = {}) {
+  const entry = getPlanEntry(entryId);
+  const cleanTitle = String(title || '')
+    .trim()
+    .replace(/\s+/g, ' ');
+  if (!entry || !cleanTitle) return null;
+
+  const removed = entry.recipeId ? removePlanItems(entry.id) : 0;
+  entry.recipeId = null;
+  entry.title = cleanTitle;
+  if (servings !== null) entry.servings = normalizeServings(servings);
+  entry.updatedAt = nowIso();
   commit();
   return { entry, removed };
 }
 
-export function clearPlanEntry(date, slot) {
-  const entry = getPlanEntry(date, slot);
+export function removePlanEntry(entryId) {
+  const entry = getPlanEntry(entryId);
   if (!entry) return null;
 
   const timestamp = nowIso();
   const removed = removePlanItems(entry.id);
   state.plan = state.plan.filter((item) => item.id !== entry.id);
-  addPlanTombstone(date, slot, timestamp);
+  addPlanTombstone(entry.id, timestamp);
   commit();
   return { entry, removed };
 }
 
-export function clearPlanDay(date) {
-  const entries = state.plan.filter((entry) => entry.date === date);
-  if (!entries.length) return { cleared: 0, removed: 0 };
+/** Empties the meal list. Ingredients already on grocery lists are kept. */
+export function clearPlan() {
+  const cleared = state.plan.length;
+  if (!cleared) return { cleared: 0 };
 
   const timestamp = nowIso();
-  let removed = 0;
-  for (const entry of entries) {
-    removed += removePlanItems(entry.id);
-    addPlanTombstone(entry.date, entry.slot, timestamp);
-  }
-
-  state.plan = state.plan.filter((entry) => entry.date !== date);
+  for (const entry of state.plan) addPlanTombstone(entry.id, timestamp);
+  state.plan = [];
   commit();
-  return { cleared: entries.length, removed };
+  return { cleared };
+}
+
+export function getIdeas() {
+  return state.ideas;
+}
+
+export function setIdeas(text) {
+  const value = typeof text === 'string' ? text : '';
+  if (state.ideas && state.ideas.text === value) return false;
+
+  state.ideas = { text: value, updatedAt: nowIso() };
+  commit();
+  return true;
 }
 
 export function getStorageInfo() {
@@ -1117,49 +1150,14 @@ function commit({ touch = true } = {}) {
   scheduleSave();
 }
 
-function upsertPlanEntry({ date, slot, recipeId = null, title = '', servings = null }) {
-  const existing = getPlanEntry(date, slot);
-  const next = normalizePlanEntry({
-    id: existing ? existing.id : undefined,
-    date,
-    slot,
-    recipeId,
-    title,
-    servings,
-    createdAt: existing ? existing.createdAt : undefined,
-    updatedAt: nowIso(),
-  });
-  if (!next) return null;
-
-  removePlanTombstone(date, slot);
-
-  if (existing) {
-    existing.recipeId = next.recipeId;
-    existing.title = next.title;
-    existing.servings = next.servings;
-    existing.updatedAt = next.updatedAt;
-    return existing;
-  }
-
-  state.plan.push(next);
-  return next;
-}
-
-function removePlanTombstone(date, slot) {
-  if (!Array.isArray(state.planTombstones) || !state.planTombstones.length) return;
-
-  const key = `${date}:${slot}`;
-  state.planTombstones = state.planTombstones.filter(
-    (entry) => `${entry.date}:${entry.slot}` !== key
-  );
-}
-
-function addPlanTombstone(date, slot, deletedAt = nowIso()) {
-  const tombstone = createPlanTombstone(date, slot, deletedAt);
+function addPlanTombstone(entryId, deletedAt = nowIso()) {
+  const tombstone = createPlanTombstone(entryId, deletedAt);
   if (!tombstone) return;
 
-  removePlanTombstone(date, slot);
   if (!Array.isArray(state.planTombstones)) state.planTombstones = [];
+  state.planTombstones = state.planTombstones.filter(
+    (entry) => entry.id !== tombstone.id
+  );
   state.planTombstones.push(tombstone);
 }
 

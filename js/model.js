@@ -2,12 +2,10 @@
 
 import {
   AISLES,
-  PLAN_SLOTS,
   RECIPE_CATEGORIES,
   SCHEMA_VERSION,
   STORE_PRESETS,
 } from './config.js';
-import { isValidDateKey } from './dates.js';
 
 const AISLE_KEYWORDS = [
   ['Frozen', ['frozen', 'ice cream', 'popsicle', 'frozen pizza']],
@@ -311,8 +309,6 @@ export function createRecipe({
 }
 
 export function createPlanEntry({
-  date,
-  slot,
   recipeId = null,
   title = '',
   servings = null,
@@ -321,8 +317,6 @@ export function createPlanEntry({
 
   return {
     id: uid('pln'),
-    date: String(date || '').trim(),
-    slot: String(slot || '').trim().toLowerCase(),
     recipeId:
       typeof recipeId === 'string' && recipeId ? recipeId : null,
     title: String(title || '')
@@ -337,12 +331,6 @@ export function createPlanEntry({
 export function normalizePlanEntry(input) {
   if (!input || typeof input !== 'object') return null;
 
-  const date = String(input.date || '').trim();
-  const slot = String(input.slot || '')
-    .trim()
-    .toLowerCase();
-  if (!isValidDateKey(date) || !PLAN_SLOTS.includes(slot)) return null;
-
   const timestamp = nowIso();
   const createdAt = typeof input.createdAt === 'string' ? input.createdAt : timestamp;
   const recipeId =
@@ -355,8 +343,6 @@ export function normalizePlanEntry(input) {
 
   return {
     id: typeof input.id === 'string' && input.id ? input.id : uid('pln'),
-    date,
-    slot,
     recipeId,
     title,
     servings: normalizeServings(input.servings),
@@ -365,19 +351,16 @@ export function normalizePlanEntry(input) {
   };
 }
 
-export function createPlanTombstone(date, slot, deletedAt = nowIso()) {
-  return normalizePlanTombstone({ date, slot, deletedAt });
+export function createPlanTombstone(id, deletedAt = nowIso()) {
+  return normalizePlanTombstone({ id, deletedAt });
 }
 
-/** A deleted plan slot is kept as a tombstone so the deletion can sync. */
+/** A deleted plan entry is kept as a tombstone so the deletion can sync. */
 export function normalizePlanTombstone(input) {
   if (!input || typeof input !== 'object') return null;
 
-  const date = String(input.date || '').trim();
-  const slot = String(input.slot || '')
-    .trim()
-    .toLowerCase();
-  if (!isValidDateKey(date) || !PLAN_SLOTS.includes(slot)) return null;
+  const id = String(input.id || '').trim();
+  if (!id) return null;
 
   const deletedAt =
     typeof input.deletedAt === 'string' && !Number.isNaN(Date.parse(input.deletedAt))
@@ -385,7 +368,29 @@ export function normalizePlanTombstone(input) {
       : null;
   if (!deletedAt) return null;
 
-  return { date, slot, deletedAt };
+  return { id, deletedAt };
+}
+
+function normalizeIdeas(input, fallbackUpdatedAt = null) {
+  const timestamp =
+    typeof fallbackUpdatedAt === 'string' &&
+    !Number.isNaN(Date.parse(fallbackUpdatedAt))
+      ? fallbackUpdatedAt
+      : nowIso();
+
+  if (typeof input === 'string') {
+    return { text: input, updatedAt: timestamp };
+  }
+
+  const source = input && typeof input === 'object' ? input : {};
+  return {
+    text: typeof source.text === 'string' ? source.text : '',
+    updatedAt:
+      typeof source.updatedAt === 'string' &&
+      !Number.isNaN(Date.parse(source.updatedAt))
+        ? source.updatedAt
+        : timestamp,
+  };
 }
 
 export function createEmptyState() {
@@ -402,6 +407,7 @@ export function createEmptyState() {
     recipes: [],
     plan: [],
     planTombstones: [],
+    ideas: { text: '', updatedAt: timestamp },
     settings,
   };
 }
@@ -581,14 +587,13 @@ export function normalizeState(input) {
     ? input.lists.map((list) => normalizeList(list, settings.aisleOrder)).filter(Boolean)
     : [];
 
-  const planByKey = new Map();
+  const planById = new Map();
   for (const rawEntry of Array.isArray(input.plan) ? input.plan : []) {
     const entry = normalizePlanEntry(rawEntry);
     if (!entry) continue;
 
-    const key = `${entry.date}:${entry.slot}`;
-    const existing = planByKey.get(key);
-    if (!existing || entry.updatedAt > existing.updatedAt) planByKey.set(key, entry);
+    const existing = planById.get(entry.id);
+    if (!existing || entry.updatedAt > existing.updatedAt) planById.set(entry.id, entry);
   }
 
   const tombstones = new Map();
@@ -598,21 +603,20 @@ export function normalizeState(input) {
     const tombstone = normalizePlanTombstone(rawTombstone);
     if (!tombstone) continue;
 
-    const key = `${tombstone.date}:${tombstone.slot}`;
-    const existing = tombstones.get(key);
+    const existing = tombstones.get(tombstone.id);
     if (!existing || tombstone.deletedAt > existing.deletedAt) {
-      tombstones.set(key, tombstone);
+      tombstones.set(tombstone.id, tombstone);
     }
   }
 
   // A tombstone removes the matching live entry; a newer live entry revives
-  // the slot. Equal timestamps treat the delete as the winner.
-  for (const [key, entry] of [...planByKey.entries()]) {
-    const tombstone = tombstones.get(key);
+  // the meal. Equal timestamps treat the delete as the winner.
+  for (const [id, entry] of [...planById.entries()]) {
+    const tombstone = tombstones.get(id);
     if (!tombstone) continue;
 
-    if (tombstone.deletedAt >= entry.updatedAt) planByKey.delete(key);
-    else tombstones.delete(key);
+    if (tombstone.deletedAt >= entry.updatedAt) planById.delete(id);
+    else tombstones.delete(id);
   }
 
   const state = {
@@ -623,8 +627,9 @@ export function normalizeState(input) {
     recipes: Array.isArray(input.recipes)
       ? input.recipes.map(normalizeRecipe).filter(Boolean)
       : [],
-    plan: [...planByKey.values()],
+    plan: [...planById.values()],
     planTombstones: [...tombstones.values()],
+    ideas: normalizeIdeas(input.ideas, input.updatedAt),
     settings,
   };
 
@@ -662,7 +667,7 @@ export function summarizeState(input) {
 
   const plan =
     input && Array.isArray(input.plan)
-      ? input.plan.filter((entry) => entry && entry.date && entry.slot).length
+      ? input.plan.filter((entry) => entry && (entry.recipeId || entry.title)).length
       : 0;
 
   return { lists: lists.length, items, recipes, plan };

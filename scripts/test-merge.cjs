@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 
   function makeState(overrides = {}) {
     return model.normalizeState({
-      schemaVersion: 2,
+      schemaVersion: 3,
       createdAt: CREATED,
       updatedAt: CREATED,
       lists: [
@@ -52,11 +52,9 @@ const assert = require('node:assert/strict');
     };
   }
 
-  function plan(id, date, slot, title, updatedAt) {
+  function plan(id, title, updatedAt) {
     return {
       id,
-      date,
-      slot,
       recipeId: null,
       title,
       servings: 2,
@@ -65,8 +63,8 @@ const assert = require('node:assert/strict');
     };
   }
 
-  function tombstone(date, slot, deletedAt) {
-    return { date, slot, deletedAt };
+  function tombstone(id, deletedAt) {
+    return { id, deletedAt };
   }
 
   function clone(value) {
@@ -100,20 +98,10 @@ const assert = require('node:assert/strict');
   // A newer plan tombstone removes an older live meal.
   {
     const local = makeState({
-      plan: [
-        plan(
-          'pln1',
-          '2026-01-05',
-          'dinner',
-          'Tacos',
-          '2026-01-02T00:00:00.000Z'
-        ),
-      ],
+      plan: [plan('pln1', 'Tacos', '2026-01-02T00:00:00.000Z')],
     });
     const remote = makeState({
-      planTombstones: [
-        tombstone('2026-01-05', 'dinner', '2026-01-03T00:00:00.000Z'),
-      ],
+      planTombstones: [tombstone('pln1', '2026-01-03T00:00:00.000Z')],
     });
 
     const merged = mergeStates(local, remote);
@@ -121,29 +109,72 @@ const assert = require('node:assert/strict');
     assert.equal(merged.planTombstones.length, 1);
   }
 
-  // A newer live meal revives a slot deleted earlier on the other phone.
+  // A newer live meal revives one deleted earlier on the other phone.
   {
     const local = makeState({
-      plan: [
-        plan(
-          'pln1',
-          '2026-01-05',
-          'dinner',
-          'Tacos',
-          '2026-01-04T00:00:00.000Z'
-        ),
-      ],
+      plan: [plan('pln1', 'Tacos', '2026-01-04T00:00:00.000Z')],
     });
     const remote = makeState({
-      planTombstones: [
-        tombstone('2026-01-05', 'dinner', '2026-01-03T00:00:00.000Z'),
-      ],
+      planTombstones: [tombstone('pln1', '2026-01-03T00:00:00.000Z')],
     });
 
     const merged = mergeStates(local, remote);
     assert.equal(merged.plan.length, 1);
     assert.equal(merged.plan[0].title, 'Tacos');
     assert.equal(merged.planTombstones.length, 0);
+  }
+
+  // Older date/slot plans are flattened into the continuous list on upgrade.
+  {
+    const migrated = makeState({
+      plan: [
+        {
+          id: 'pln1',
+          date: '2026-01-05',
+          slot: 'dinner',
+          recipeId: null,
+          title: 'Tacos',
+          servings: 2,
+          createdAt: CREATED,
+          updatedAt: '2026-01-02T00:00:00.000Z',
+        },
+      ],
+      planTombstones: [
+        { date: '2026-01-06', slot: 'dinner', deletedAt: '2026-01-03T00:00:00.000Z' },
+      ],
+    });
+
+    assert.equal(migrated.plan.length, 1);
+    assert.equal(migrated.plan[0].title, 'Tacos');
+    assert.equal(migrated.plan[0].date, undefined);
+    assert.equal(migrated.plan[0].slot, undefined);
+    assert.equal(migrated.planTombstones.length, 0);
+  }
+
+  // The same recipe can appear twice because each planned meal has its own id.
+  {
+    const local = makeState({
+      plan: [
+        plan('pln1', 'Tacos', '2026-01-02T00:00:00.000Z'),
+        plan('pln2', 'Tacos', '2026-01-03T00:00:00.000Z'),
+      ],
+    });
+
+    const merged = mergeStates(local, makeState());
+    assert.equal(merged.plan.length, 2);
+  }
+
+  // Whichever phone has newer meal ideas wins; the note is not merged line by line.
+  {
+    const local = makeState({
+      ideas: { text: 'Tacos next week', updatedAt: '2026-01-04T00:00:00.000Z' },
+    });
+    const remote = makeState({
+      ideas: { text: 'Soup and bread', updatedAt: '2026-01-05T00:00:00.000Z' },
+    });
+
+    const merged = mergeStates(local, remote);
+    assert.equal(merged.ideas.text, 'Soup and bread');
   }
 
   // Newer list metadata wins, but both phones' items are unioned.

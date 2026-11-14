@@ -1,8 +1,8 @@
 /* Shared constants */
 
 export const APP_NAME = 'Grocery Planner';
-export const VERSION = '0.10.2';
-export const SCHEMA_VERSION = 2;
+export const VERSION = '0.11.0';
+export const SCHEMA_VERSION = 3;
 
 /* Encrypted sync relay. Leave empty to disable sharing in a build.
  * See worker/README.md for the one-time Cloudflare setup. */
@@ -23,14 +23,6 @@ export const AISLES = [
 ];
 
 export const RECIPE_CATEGORIES = ['Breakfast', 'Lunch/Dinner', 'Snack', 'Other'];
-
-export const PLAN_SLOTS = ['breakfast', 'lunch', 'dinner'];
-
-export const PLAN_SLOT_LABELS = {
-  breakfast: 'Breakfast',
-  lunch: 'Lunch',
-  dinner: 'Dinner',
-};
 
 /* Store layouts reorder the same aisles; they do not add categories. */
 export const STORE_PRESETS = {
