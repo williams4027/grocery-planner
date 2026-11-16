@@ -1,7 +1,7 @@
 /* Shared constants */
 
 export const APP_NAME = 'Grocery Planner';
-export const VERSION = '0.12.0';
+export const VERSION = '0.12.1';
 export const SCHEMA_VERSION = 3;
 
 /* Encrypted sync relay. Leave empty to disable sharing in a build.
