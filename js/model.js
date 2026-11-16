@@ -253,6 +253,32 @@ export function parseIngredientLine(line) {
   };
 }
 
+/**
+ * Case-insensitive word-prefix search for recipes. Every word the user types
+ * must match the start of a word in the title, category, or ingredient names,
+ * so "egg" matches egg/eggs but not "veggie".
+ */
+export function recipeMatchesQuery(recipe, query) {
+  const terms = String(query || '')
+    .toLowerCase()
+    .match(/[\p{L}\p{N}]+/gu);
+  if (!terms) return true;
+
+  const ingredients =
+    recipe && Array.isArray(recipe.ingredients)
+      ? recipe.ingredients.map((ingredient) =>
+          typeof ingredient === 'string' ? ingredient : (ingredient && ingredient.name) || ''
+        )
+      : [];
+  const words = [recipe && recipe.title, recipe && recipe.category, ...ingredients]
+    .join(' ')
+    .toLowerCase()
+    .match(/[\p{L}\p{N}]+/gu);
+  if (!words) return false;
+
+  return terms.every((term) => words.some((word) => word.startsWith(term)));
+}
+
 function normalizeIngredient(input) {
   const source = typeof input === 'string' ? parseIngredientLine(input) : input;
   if (!source || typeof source !== 'object') return null;

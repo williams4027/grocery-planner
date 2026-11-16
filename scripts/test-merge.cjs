@@ -294,6 +294,40 @@ const assert = require('node:assert/strict');
     assert.equal(bare.qty, null);
   }
 
+  // Recipe search is word-prefix based: "egg" matches egg/eggs, not veggie.
+  {
+    const veggie = {
+      title: 'Beef Veggie Sauce',
+      category: 'Lunch/Dinner',
+      ingredients: [{ name: 'ground beef' }, { name: 'bell pepper' }],
+    };
+    const eggRecipe = {
+      title: 'Banana Bread',
+      category: 'Snack',
+      ingredients: [{ name: 'banana' }, { name: 'egg' }],
+    };
+    const plural = {
+      title: 'Breakfast',
+      category: 'Breakfast',
+      ingredients: [{ name: 'eggs' }],
+    };
+
+    assert.equal(model.recipeMatchesQuery(veggie, 'egg'), false);
+    assert.equal(model.recipeMatchesQuery(veggie, 'VEGGIE'), true);
+    assert.equal(model.recipeMatchesQuery(eggRecipe, 'egg'), true);
+    assert.equal(model.recipeMatchesQuery(plural, 'egg'), true);
+    assert.equal(model.recipeMatchesQuery(eggRecipe, 'ban'), true);
+    assert.equal(model.recipeMatchesQuery(eggRecipe, 'green pea'), false);
+    assert.equal(
+      model.recipeMatchesQuery(
+        { title: 'Stir Fry', category: 'Lunch/Dinner', ingredients: [{ name: 'green peas' }] },
+        'green pea'
+      ),
+      true
+    );
+    assert.equal(model.recipeMatchesQuery(eggRecipe, ''), true);
+  }
+
   console.log('merge tests passed');
 })().catch((error) => {
   console.error(error);

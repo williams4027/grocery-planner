@@ -1,6 +1,7 @@
 /* Meal plan — one continuous meal list that feeds the active grocery list. */
 
 import * as store from '../store.js';
+import { recipeMatchesQuery } from '../model.js';
 import { createSheetController } from '../sheet.js';
 import { h, icon, ICONS, showCheer, showToast } from '../ui.js';
 
@@ -407,17 +408,7 @@ export function mount(root) {
       .trim()
       .toLowerCase();
     const allRecipes = store.visibleRecipes();
-    const recipes = allRecipes.filter((recipe) => {
-      if (!query) return true;
-      const haystack = [
-        recipe.title,
-        recipe.category,
-        ...recipe.ingredients.map((ingredient) => ingredient.name),
-      ]
-        .join(' ')
-        .toLowerCase();
-      return haystack.includes(query);
-    });
+    const recipes = allRecipes.filter((recipe) => recipeMatchesQuery(recipe, query));
 
     if (!recipes.length) {
       listNode.replaceChildren(

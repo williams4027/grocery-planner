@@ -1,7 +1,7 @@
 /* Recipes — seeded browser, search, detail, and add-to-list. */
 
 import { AISLES, RECIPE_CATEGORIES } from '../config.js';
-import { parseIngredientLine, suggestAisle } from '../model.js';
+import { parseIngredientLine, recipeMatchesQuery, suggestAisle } from '../model.js';
 import * as store from '../store.js';
 import { createSheetController } from '../sheet.js';
 import { formatQuantity, h, icon, ICONS, showToast } from '../ui.js';
@@ -319,15 +319,7 @@ export function mount(root) {
     if (category !== 'All' && recipe.category !== category) return false;
     if (!query) return true;
 
-    const haystack = [
-      recipe.title,
-      recipe.category,
-      ...recipe.ingredients.map((ingredient) => ingredient.name),
-    ]
-      .join(' ')
-      .toLowerCase();
-
-    return haystack.includes(query);
+    return recipeMatchesQuery(recipe, query);
   }
 
   function clearFilters() {
