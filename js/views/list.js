@@ -15,6 +15,7 @@ export function mount(root) {
   let selectedAisleListId = null;
   let lastActiveChipId = null;
   let editingItemId = null;
+  let focusQtyOnOpen = false;
   let lastItemTrigger = null;
   let selecting = false;
   let selectionListId = null;
@@ -155,19 +156,37 @@ export function mount(root) {
           />
         </label>
         <div class="add__details">
-          <label class="field field--stacked">
-            <span class="field__label">Qty</span>
-            <input
-              id="add-qty"
-              class="field__input field__input--qty"
-              name="qty"
-              type="number"
-              inputmode="decimal"
-              step="0.25"
-              min="0"
-              placeholder="2"
-            />
-          </label>
+          <div class="field field--stacked">
+            <span class="field__label" id="add-qty-label">Qty</span>
+            <div class="qty-stepper">
+              <button
+                id="add-qty-down"
+                class="qty-stepper__btn"
+                type="button"
+                aria-label="Decrease quantity"
+              >
+                −
+              </button>
+              <input
+                id="add-qty"
+                class="field__input field__input--qty"
+                name="qty"
+                type="text"
+                inputmode="decimal"
+                autocomplete="off"
+                placeholder="2"
+                aria-labelledby="add-qty-label"
+              />
+              <button
+                id="add-qty-up"
+                class="qty-stepper__btn"
+                type="button"
+                aria-label="Increase quantity"
+              >
+                +
+              </button>
+            </div>
+          </div>
           <label class="field field--stacked">
             <span class="field__label">Description</span>
             <input
@@ -361,6 +380,8 @@ export function mount(root) {
     submitButton: root.querySelector('#add-submit'),
     nameInput: root.querySelector('#add-name'),
     qtyInput: root.querySelector('#add-qty'),
+    qtyDown: root.querySelector('#add-qty-down'),
+    qtyUp: root.querySelector('#add-qty-up'),
     unitInput: root.querySelector('#add-unit'),
     aisleSelect: root.querySelector('#add-aisle'),
     listField: root.querySelector('#add-list-field'),
@@ -982,6 +1003,21 @@ export function mount(root) {
   function itemNode(item) {
     const checkboxId = `cb-${item.id}`;
     const quantity = formatQuantity(item);
+    const qtyNode = quantity
+      ? selecting
+        ? h('span', { class: 'item__qty' }, quantity)
+        : h(
+            'button',
+            {
+              class: 'item__qty',
+              type: 'button',
+              dataset: { id: item.id, action: 'edit-qty' },
+              'aria-label': `Edit quantity for ${item.name}`,
+              title: 'Edit quantity',
+            },
+            quantity
+          )
+      : null;
     const isSelected = selecting && selectedItemIds.has(item.id);
     const classes = [
       'item',
@@ -1009,7 +1045,7 @@ export function mount(root) {
           'span',
           { class: 'item__text' },
           h('span', { class: 'item__name' }, item.name),
-          quantity ? h('span', { class: 'item__qty' }, quantity) : null
+          qtyNode
         )
       ),
       selecting
@@ -1044,6 +1080,20 @@ export function mount(root) {
 
   /* ---------- Sheets ---------- */
 
+  function syncQtyStepper() {
+    const raw = refs.qtyInput.value.trim();
+    const qty = raw === '' ? 0 : Number(raw);
+    refs.qtyDown.disabled = !Number.isFinite(qty) || qty <= 0;
+  }
+
+  function stepQuantity(delta) {
+    const current = Number(refs.qtyInput.value);
+    const base = Number.isFinite(current) ? current : 0;
+    const next = Math.round(Math.max(0, base + delta) * 100) / 100;
+    refs.qtyInput.value = next ? String(next) : '';
+    syncQtyStepper();
+  }
+
   function prepareAddSheet() {
     refs.status.textContent = '';
 
@@ -1058,6 +1108,7 @@ export function mount(root) {
         refs.submitButton.textContent = 'Save';
         refs.nameInput.value = item.name;
         refs.qtyInput.value = item.qty == null ? '' : String(item.qty);
+        syncQtyStepper();
         refs.unitInput.value = item.unit || '';
         renderAisleOptions(item.aisle === suggestAisle(item.name) ? '' : item.aisle);
         renderAddListOptions({ forceActive: true });
@@ -1072,6 +1123,7 @@ export function mount(root) {
     refs.submitButton.textContent = 'Add';
     renderAisleOptions();
     renderAddListOptions({ forceActive: true });
+    syncQtyStepper();
   }
 
   function resetAddSheetMode() {
@@ -1138,10 +1190,12 @@ export function mount(root) {
   const addSheet = createSheetController(refs.dialog, {
     trigger: () =>
       lastItemTrigger && lastItemTrigger.isConnected ? lastItemTrigger : refs.fab,
-    initialFocus: () => refs.nameInput,
+    initialFocus: () =>
+      focusQtyOnOpen ? refs.qtyInput : refs.nameInput,
     selectOnOpen: true,
     onOpen: prepareAddSheet,
     onClose: () => {
+      focusQtyOnOpen = false;
       resetAddSheetMode();
       refs.status.textContent = '';
     },
@@ -1205,11 +1259,15 @@ export function mount(root) {
   refs.fab.addEventListener('click', () => {
     lastItemTrigger = null;
     editingItemId = null;
+    focusQtyOnOpen = false;
     addSheet.open();
   });
   refs.closeButton.addEventListener('click', () => addSheet.close());
   refs.listSelect.addEventListener('change', updateSubmitLabel);
   refs.nameInput.addEventListener('input', updateAisleSuggestion);
+  refs.qtyDown.addEventListener('click', () => stepQuantity(-1));
+  refs.qtyUp.addEventListener('click', () => stepQuantity(1));
+  refs.qtyInput.addEventListener('input', syncQtyStepper);
 
   refs.form.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -1708,9 +1766,19 @@ export function mount(root) {
     const list = currentList();
     if (!list) return;
 
+    if (button.dataset.action === 'edit-qty') {
+      event.preventDefault();
+      lastItemTrigger = button;
+      editingItemId = button.dataset.id;
+      focusQtyOnOpen = true;
+      addSheet.open();
+      return;
+    }
+
     if (button.dataset.action === 'edit') {
       lastItemTrigger = button;
       editingItemId = button.dataset.id;
+      focusQtyOnOpen = false;
       addSheet.open();
       return;
     }

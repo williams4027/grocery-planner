@@ -954,12 +954,86 @@ body.sheet-open .toast {
 
 .add__details {
   display: grid;
-  grid-template-columns: minmax(90px, 0.45fr) minmax(0, 1fr);
+  grid-template-columns: minmax(132px, 0.55fr) minmax(0, 1fr);
   gap: 10px;
 }
 
 .add__details .field {
   max-width: none;
+}
+
+.qty-stepper {
+  display: flex;
+  align-items: stretch;
+  height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.qty-stepper:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.qty-stepper .field__input {
+  flex: 1;
+  width: 0;
+  height: 100%;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.qty-stepper .field__input:focus {
+  outline: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.qty-stepper .field__input::-webkit-outer-spin-button,
+.qty-stepper .field__input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.qty-stepper__btn {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.qty-stepper__btn:hover:not(:disabled),
+.qty-stepper__btn:focus-visible {
+  background: var(--accent-soft);
+  outline: none;
+}
+
+.qty-stepper__btn:disabled {
+  color: var(--muted);
+  opacity: 0.45;
+  cursor: default;
+}
+
+.qty-stepper__btn:first-child {
+  border-right: 1px solid var(--line);
+}
+
+.qty-stepper__btn:last-child {
+  border-left: 1px solid var(--line);
 }
 
 .add__aisle-field {
@@ -1144,6 +1218,39 @@ body.sheet-open .toast {
   font-size: 13px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+button.item__qty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 30px;
+  margin-left: -2px;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+button.item__qty:hover,
+button.item__qty:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  outline: none;
+}
+
+.item.is-done button.item__qty {
+  color: var(--muted);
 }
 
 .item.is-done {
