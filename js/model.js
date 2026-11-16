@@ -221,9 +221,9 @@ function parseTrailingQuantity(text) {
 
 /**
  * Splits a recipe line like "1 1/2 cups chopped carrots" into quantity, unit,
- * and the item name used by the grocery list. Lines without a recognised unit
- * stay whole, so "1 small onion" is not mangled into a bare "small onion".
- * A trailing count such as "apples 8" is also extracted, with or without a unit.
+ * and the item name used by the grocery list. A leading or trailing count is
+ * extracted even without a unit, so "1 avocado" and "apples 8" both keep their
+ * quantities.
  */
 export function parseIngredientLine(line) {
   const raw = String(line || '')
@@ -244,7 +244,13 @@ export function parseIngredientLine(line) {
 
   const qty = normalizeQty(quantityValue(quantityMatch[1]));
   const unitMatch = quantityMatch[2].match(INGREDIENT_UNITS);
-  if (!unitMatch) return { name: raw, qty: null, unit: '' };
+  if (!unitMatch) {
+    return {
+      name: quantityMatch[2].trim(),
+      qty,
+      unit: '',
+    };
+  }
 
   return {
     name: unitMatch[2].trim(),

@@ -280,15 +280,24 @@ const assert = require('node:assert/strict');
     assert.equal(withUnit.qty, 2);
     assert.equal(withUnit.unit, 'lbs');
 
-    // Existing leading-quantity parsing and "no recognised unit" behavior still apply.
+    // Existing leading-quantity parsing still works, with or without a unit.
     const leading = model.parseIngredientLine('1 1/2 cups chopped carrots');
     assert.equal(leading.name, 'chopped carrots');
     assert.equal(leading.qty, 1.5);
     assert.equal(leading.unit, 'cups');
 
-    const bare = model.parseIngredientLine('1 small onion');
-    assert.equal(bare.name, '1 small onion');
-    assert.equal(bare.qty, null);
+    const bareLeading = model.parseIngredientLine('1 avocado');
+    assert.equal(bareLeading.name, 'avocado');
+    assert.equal(bareLeading.qty, 1);
+    assert.equal(bareLeading.unit, '');
+
+    const multiWord = model.parseIngredientLine('2 large eggs');
+    assert.equal(multiWord.name, 'large eggs');
+    assert.equal(multiWord.qty, 2);
+
+    const onion = model.parseIngredientLine('1 small onion');
+    assert.equal(onion.name, 'small onion');
+    assert.equal(onion.qty, 1);
   }
 
   // Recipe search is word-prefix based: "egg" matches egg/eggs, not veggie.
