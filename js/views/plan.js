@@ -478,12 +478,10 @@ export function mount(root) {
       ? store.updatePlanRecipe({
           entryId: selectedEntryId,
           recipeId: recipe.id,
-          servings: recipe.servings,
           listId: active.id,
         })
       : store.addRecipeToPlan({
           recipeId: recipe.id,
-          servings: recipe.servings,
           listId: active.id,
         });
 
@@ -510,7 +508,6 @@ export function mount(root) {
     const result = store.updatePlanRecipe({
       entryId: entry.id,
       recipeId: entry.recipeId,
-      servings: entry.servings,
       listId: active.id,
     });
 
@@ -535,8 +532,8 @@ export function mount(root) {
 
     const existing = selectedEntryId ? store.getPlanEntry(selectedEntryId) : null;
     const result = existing
-      ? store.updatePlanMeal({ entryId: existing.id, title, servings: 1 })
-      : store.addPlanMeal({ title, servings: 1 });
+      ? store.updatePlanMeal({ entryId: existing.id, title })
+      : store.addPlanMeal({ title });
 
     if (!result) {
       setStatus('Could not save that meal.');

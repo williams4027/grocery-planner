@@ -67,13 +67,6 @@ function validatePlanEntry(entry, index) {
   if (!cleanName(entry.recipeId) && !cleanName(entry.title)) {
     throw invalid(`Planned meal ${index + 1} is missing its recipe or meal name.`);
   }
-
-  if (entry.servings !== undefined) {
-    const servings = Number(entry.servings);
-    if (!Number.isFinite(servings) || servings < 1) {
-      throw invalid(`Planned meal ${index + 1} has invalid servings.`);
-    }
-  }
 }
 
 function validatePlanTombstone(tombstone, index) {

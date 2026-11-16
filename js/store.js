@@ -15,7 +15,6 @@ import {
   createRecipe,
   normalizeAisleOrder,
   normalizeQty,
-  normalizeServings,
   normalizeState,
   nowIso,
   suggestAisle,
@@ -231,7 +230,6 @@ export function updateRecipe(recipeId, input = {}) {
 
   recipe.title = next.title;
   recipe.category = next.category;
-  recipe.servings = next.servings;
   recipe.ingredients = next.ingredients;
   recipe.steps = next.steps;
   recipe.notes = next.notes;
@@ -278,7 +276,6 @@ export function duplicateRecipe(recipeId) {
   const copy = createRecipe({
     title: uniqueRecipeTitle(recipe.title),
     category: recipe.category,
-    servings: recipe.servings,
     ingredients: recipe.ingredients,
     steps: recipe.steps,
     notes: recipe.notes,
@@ -343,12 +340,12 @@ function resolvePlanList(listId) {
 }
 
 /**
- * Adds a recipe's ingredients to the chosen list at the planned servings.
+ * Adds a recipe's ingredients to the chosen list.
  * Unchecked items previously added by this plan entry are replaced; checked
  * items are kept. Each planned meal has its own id, so the same recipe can be
  * planned more than once and its contributions stay separate.
  */
-function applyRecipeToPlan(entry, recipe, list, plannedServings) {
+function applyRecipeToPlan(entry, recipe, list) {
   const removed = removePlanItems(entry.id);
   const preserved = new Set(
     list.items
@@ -371,7 +368,7 @@ function applyRecipeToPlan(entry, recipe, list, plannedServings) {
 
     const item = createItem({
       name: ingredient.name,
-      qty: scaleQuantity(ingredient.qty, recipe.servings, plannedServings),
+      qty: ingredient.qty,
       unit: ingredient.unit,
       aisle: ingredient.aisle,
       sourceRecipeId: recipe.id,
@@ -396,61 +393,50 @@ function applyRecipeToPlan(entry, recipe, list, plannedServings) {
   return { entry, recipe, list, added, skipped, removed };
 }
 
-export function addRecipeToPlan({ recipeId, servings = null, listId = null } = {}) {
+export function addRecipeToPlan({ recipeId, listId = null } = {}) {
   const recipe = getRecipe(recipeId);
   const list = resolvePlanList(listId);
   if (!recipe || !list) return null;
 
-  const plannedServings = normalizeServings(servings ?? recipe.servings);
   const entry = createPlanEntry({
     recipeId: recipe.id,
     title: recipe.title,
-    servings: plannedServings,
   });
   state.plan.push(entry);
 
-  const result = applyRecipeToPlan(entry, recipe, list, plannedServings);
+  const result = applyRecipeToPlan(entry, recipe, list);
   commit();
   return result;
 }
 
-export function updatePlanRecipe({
-  entryId,
-  recipeId,
-  servings = null,
-  listId = null,
-} = {}) {
+export function updatePlanRecipe({ entryId, recipeId, listId = null } = {}) {
   const entry = getPlanEntry(entryId);
   const recipe = getRecipe(recipeId);
   const list = resolvePlanList(listId);
   if (!entry || !recipe || !list) return null;
 
-  const plannedServings = normalizeServings(
-    servings ?? entry.servings ?? recipe.servings
-  );
   entry.recipeId = recipe.id;
   entry.title = recipe.title;
-  entry.servings = plannedServings;
   entry.updatedAt = nowIso();
 
-  const result = applyRecipeToPlan(entry, recipe, list, plannedServings);
+  const result = applyRecipeToPlan(entry, recipe, list);
   commit();
   return result;
 }
 
-export function addPlanMeal({ title, servings = 1 } = {}) {
+export function addPlanMeal({ title } = {}) {
   const cleanTitle = String(title || '')
     .trim()
     .replace(/\s+/g, ' ');
   if (!cleanTitle) return null;
 
-  const entry = createPlanEntry({ title: cleanTitle, servings });
+  const entry = createPlanEntry({ title: cleanTitle });
   state.plan.push(entry);
   commit();
   return { entry, removed: 0 };
 }
 
-export function updatePlanMeal({ entryId, title, servings = null } = {}) {
+export function updatePlanMeal({ entryId, title } = {}) {
   const entry = getPlanEntry(entryId);
   const cleanTitle = String(title || '')
     .trim()
@@ -460,7 +446,6 @@ export function updatePlanMeal({ entryId, title, servings = null } = {}) {
   const removed = entry.recipeId ? removePlanItems(entry.id) : 0;
   entry.recipeId = null;
   entry.title = cleanTitle;
-  if (servings !== null) entry.servings = normalizeServings(servings);
   entry.updatedAt = nowIso();
   commit();
   return { entry, removed };
@@ -1179,13 +1164,6 @@ function removePlanItems(planEntryId) {
   }
 
   return removed;
-}
-
-function scaleQuantity(qty, recipeServings, plannedServings) {
-  if (qty === null || qty === undefined) return null;
-  const from = Number(recipeServings) || 1;
-  const to = Number(plannedServings) || from;
-  return normalizeQty(qty * (to / from));
 }
 
 function planContributionMap(item) {

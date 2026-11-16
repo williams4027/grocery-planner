@@ -57,7 +57,6 @@ const assert = require('node:assert/strict');
       id,
       recipeId: null,
       title,
-      servings: 2,
       createdAt: CREATED,
       updatedAt,
     };
@@ -134,7 +133,6 @@ const assert = require('node:assert/strict');
           slot: 'dinner',
           recipeId: null,
           title: 'Tacos',
-          servings: 2,
           createdAt: CREATED,
           updatedAt: '2026-01-02T00:00:00.000Z',
         },
@@ -220,7 +218,6 @@ const assert = require('node:assert/strict');
           id: 'rcp1',
           title: 'Chili',
           category: 'Lunch/Dinner',
-          servings: 4,
           ingredients: [],
           steps: [],
           notes: '',

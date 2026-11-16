@@ -310,12 +310,6 @@ function normalizeRecipeCategory(value) {
   return 'Other';
 }
 
-export function normalizeServings(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number <= 0) return 4;
-  return Math.max(1, Math.round(number));
-}
-
 function normalizeRecipePosition(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
@@ -331,7 +325,6 @@ function normalizeSteps(value) {
 export function createRecipe({
   title,
   category = 'Lunch/Dinner',
-  servings = 4,
   ingredients = [],
   steps = [],
   notes = '',
@@ -348,7 +341,6 @@ export function createRecipe({
         .trim()
         .replace(/\s+/g, ' ') || 'Untitled recipe',
     category: normalizeRecipeCategory(category),
-    servings: normalizeServings(servings),
     ingredients: Array.isArray(ingredients)
       ? ingredients.map(normalizeIngredient).filter(Boolean)
       : [],
@@ -366,7 +358,6 @@ export function createRecipe({
 export function createPlanEntry({
   recipeId = null,
   title = '',
-  servings = null,
 } = {}) {
   const timestamp = nowIso();
 
@@ -377,7 +368,6 @@ export function createPlanEntry({
     title: String(title || '')
       .trim()
       .replace(/\s+/g, ' '),
-    servings: normalizeServings(servings),
     createdAt: timestamp,
     updatedAt: timestamp,
   };
@@ -400,7 +390,6 @@ export function normalizePlanEntry(input) {
     id: typeof input.id === 'string' && input.id ? input.id : uid('pln'),
     recipeId,
     title,
-    servings: normalizeServings(input.servings),
     createdAt,
     updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : createdAt,
   };
@@ -581,7 +570,6 @@ function normalizeRecipe(input) {
     id: typeof input.id === 'string' && input.id ? input.id : uid('rcp'),
     title,
     category: normalizeRecipeCategory(input.category),
-    servings: normalizeServings(input.servings),
     ingredients: Array.isArray(input.ingredients)
       ? input.ingredients.map(normalizeIngredient).filter(Boolean)
       : [],

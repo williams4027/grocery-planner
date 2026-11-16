@@ -156,12 +156,11 @@ PLAN.md                 product plan, data model, phase breakdown
   into quantity, unit, and item name automatically. In the recipe detail, each ingredient has an
   **Aisle** selector; changes save immediately and carry through when you add the recipe to a list
   or edit its ingredient lines. Use **Duplicate** to create a copy directly after the original.
-  Recipes are listed alphabetically within each category. Recipe-level serving
-  scaling is deferred; the meal plan still scales by planned servings.
+  Recipes are listed alphabetically within each category.
 - **Plan meals as one continuous list**, without days or slots. Add the same recipe more than once,
-  set servings, or type a custom meal like “Leftovers.” Choosing a recipe adds its ingredients to
-  the selected store list automatically, scaled to the planned servings. Meals that share an
-  ingredient keep one combined row; removing one meal removes only its share of the quantity.
+  or type a custom meal like “Leftovers.” Choosing a recipe adds its ingredients to the selected
+  store list automatically. Meals that share an ingredient keep one combined row; removing one meal
+  removes only its share of the quantity.
   Items you already checked off are kept. **Clear** empties the meal list and leaves the grocery
   list untouched.
 - Keep **future meal ideas** in the **Ideas** tab. It is a free-form notes page for dishes, links,
