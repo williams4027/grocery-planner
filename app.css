@@ -2483,68 +2483,6 @@ body.sheet-open {
   font-size: 12px;
 }
 
-.plan-servings {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  margin: 14px 0;
-}
-
-.plan-servings .field__label {
-  font-size: 13px;
-}
-
-.plan-stepper {
-  display: inline-flex;
-  align-items: center;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--bg);
-}
-
-.plan-stepper__btn {
-  width: 44px;
-  height: 44px;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font-size: 22px;
-  line-height: 1;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.plan-stepper__btn:hover {
-  background: var(--surface-2);
-}
-
-.plan-stepper__input {
-  width: 54px;
-  height: 44px;
-  border: 0;
-  border-right: 1px solid var(--line);
-  border-left: 1px solid var(--line);
-  background: transparent;
-  color: var(--text);
-  font-size: 16px;
-  font-weight: 600;
-  text-align: center;
-  -moz-appearance: textfield;
-}
-
-.plan-stepper__input::-webkit-outer-spin-button,
-.plan-stepper__input::-webkit-inner-spin-button {
-  margin: 0;
-  -webkit-appearance: none;
-}
-
-.plan-servings__note {
-  color: var(--muted);
-  font-size: 12px;
-}
-
 .plan-actions {
   display: grid;
   gap: 8px;

@@ -8,12 +8,6 @@ function countLabel(count, singular, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
-function clampServings(value) {
-  const number = Number.parseInt(value, 10);
-  if (!Number.isFinite(number)) return 1;
-  return Math.max(1, Math.min(99, number));
-}
-
 export function mount(root) {
   let selectedEntryId = null;
   let selectedTrigger = null;
@@ -56,8 +50,8 @@ export function mount(root) {
       <div id="plan-list" class="plan-list"></div>
 
       <p class="card__note plan-list__note">
-        Tap a meal to change servings or swap the recipe. Removing a meal removes only its
-        unchecked ingredients.
+        Tap a meal to swap the recipe or remove it. Removing a meal removes only its unchecked
+        ingredients.
       </p>
     </section>
 
@@ -102,7 +96,6 @@ export function mount(root) {
     },
     initialFocus: () =>
       refs.dialogBody.querySelector('#plan-recipe-search') ||
-      refs.dialogBody.querySelector('#plan-servings') ||
       refs.dialogBody.querySelector('#plan-custom-name') ||
       refs.dialogClose,
     onClose: () => {
@@ -223,7 +216,7 @@ export function mount(root) {
     if (planMode === 'edit' && entry) {
       refs.dialogTitle.textContent = 'Edit meal';
       refs.dialogContext.textContent = entry.recipeId
-        ? 'Update servings, swap the recipe, or remove this meal.'
+        ? 'Swap the recipe or remove this meal.'
         : 'Rename or remove this meal.';
       renderEdit(entry);
       return;
@@ -263,47 +256,6 @@ export function mount(root) {
         ),
         h(
           'div',
-          { class: 'plan-servings' },
-          h('span', { class: 'field__label' }, 'Servings'),
-          h(
-            'div',
-            { class: 'plan-stepper' },
-            h(
-              'button',
-              {
-                class: 'plan-stepper__btn',
-                type: 'button',
-                dataset: { action: 'servings-down' },
-                'aria-label': 'Fewer servings',
-              },
-              '−'
-            ),
-            h('input', {
-              class: 'plan-stepper__input',
-              id: 'plan-servings',
-              type: 'number',
-              inputmode: 'numeric',
-              min: '1',
-              max: '99',
-              step: '1',
-              value: String(entry.servings),
-              'aria-label': 'Planned servings',
-            }),
-            h(
-              'button',
-              {
-                class: 'plan-stepper__btn',
-                type: 'button',
-                dataset: { action: 'servings-up' },
-                'aria-label': 'More servings',
-              },
-              '+'
-            )
-          ),
-          h('span', { class: 'plan-servings__note' }, `Recipe makes ${recipe.servings}`)
-        ),
-        h(
-          'div',
           { class: 'plan-actions' },
           h(
             'button',
@@ -312,7 +264,7 @@ export function mount(root) {
               type: 'button',
               dataset: { action: 'update-plan' },
             },
-            recipe.ingredients.length ? 'Update ingredients' : 'Save servings'
+            'Update ingredients'
           ),
           h(
             'button',
@@ -570,12 +522,10 @@ export function mount(root) {
       return;
     }
 
-    const input = refs.dialogBody.querySelector('#plan-servings');
-    const servings = clampServings(input ? input.value : entry.servings);
     const result = store.updatePlanRecipe({
       entryId: entry.id,
       recipeId: entry.recipeId,
-      servings,
+      servings: entry.servings,
       listId: active.id,
     });
 
@@ -695,15 +645,6 @@ export function mount(root) {
     if (!button) return;
 
     const action = button.dataset.action;
-    if (action === 'servings-down' || action === 'servings-up') {
-      const input = refs.dialogBody.querySelector('#plan-servings');
-      if (!input) return;
-      input.value = String(
-        clampServings(Number(input.value || 1) + (action === 'servings-up' ? 1 : -1))
-      );
-      return;
-    }
-
     if (action === 'update-plan') updatePlan();
     else if (action === 'pick-recipe') pickRecipe(button.dataset.recipeId);
     else if (action === 'change-recipe') {
@@ -719,12 +660,6 @@ export function mount(root) {
 
   refs.dialogBody.addEventListener('input', (event) => {
     if (event.target.id === 'plan-recipe-search') renderRecipeOptions();
-  });
-
-  refs.dialogBody.addEventListener('keydown', (event) => {
-    if (event.target.id !== 'plan-servings' || event.key !== 'Enter') return;
-    event.preventDefault();
-    updatePlan();
   });
 
   renderTarget();
