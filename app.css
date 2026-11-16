@@ -607,38 +607,6 @@ h2 {
   opacity: 0.55;
 }
 
-.roadmap {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: 14px;
-}
-
-.roadmap li {
-  display: flex;
-  gap: 10px;
-  padding: 7px 0;
-  color: var(--muted);
-}
-
-.roadmap li.is-current {
-  color: var(--text);
-  font-weight: 550;
-}
-
-.roadmap__dot {
-  flex: none;
-  width: 7px;
-  height: 7px;
-  margin-top: 7px;
-  border-radius: 50%;
-  background: var(--line);
-}
-
-.roadmap li.is-current .roadmap__dot {
-  background: var(--accent);
-}
-
 /* ---------- Buttons ---------- */
 
 .btn {
@@ -1278,15 +1246,6 @@ body.sheet-open .toast {
   color: var(--muted);
   font-size: 14px;
   text-align: center;
-}
-
-.roadmap li.is-done {
-  opacity: 0.7;
-}
-
-.roadmap li.is-done .roadmap__dot {
-  background: var(--accent);
-  opacity: 0.45;
 }
 
 /* ---------- Docked add control ---------- */

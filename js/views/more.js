@@ -1,4 +1,4 @@
-/* More — build info, backup/restore, install help, roadmap. */
+/* More — build info, backup/restore, install help. */
 
 import { VERSION } from '../config.js';
 import * as store from '../store.js';
@@ -336,32 +336,6 @@ export function mount(root) {
             </span>
           </span>
         </label>
-      </section>
-
-      <section class="card" aria-labelledby="roadmap-title">
-        <div class="card__head">
-          <h2 id="roadmap-title">What&rsquo;s next</h2>
-        </div>
-        <ul class="roadmap">
-          <li class="is-done"><span class="roadmap__dot"></span>Phase 0 — installable shell</li>
-          <li class="is-done"><span class="roadmap__dot"></span>Phase 1 — grocery list that persists</li>
-          <li class="is-done"><span class="roadmap__dot"></span>Per-store lists and Google Calendar trips</li>
-          <li class="is-done"><span class="roadmap__dot"></span>Recipes, editing, and seeded meals</li>
-          <li class="is-done"><span class="roadmap__dot"></span>Backup and restore</li>
-          <li class="is-done"><span class="roadmap__dot"></span>Meal plan with automatic list additions</li>
-          <li class="is-done"><span class="roadmap__dot"></span>Shopping polish and list management</li>
-          <li class="is-done"><span class="roadmap__dot"></span>Bulk move, delete, and clear-list actions</li>
-          <li class="is-done"><span class="roadmap__dot"></span>Install prompt and backup sharing</li>
-          <li class="is-done"><span class="roadmap__dot"></span>Keep-awake shopping option</li>
-          <li class="is-done"><span class="roadmap__dot"></span>Alphabetical sorting within aisles</li>
-          <li class="is-done"><span class="roadmap__dot"></span>Recipe ordering, duplication, and .ics export</li>
-          <li class="is-done"><span class="roadmap__dot"></span>Shared Drive backup handoff</li>
-          <li class="is-done"><span class="roadmap__dot"></span>Manual aisle overrides and per-list aisle order</li>
-          <li class="is-done"><span class="roadmap__dot"></span>Google Drive backup search shortcut</li>
-          <li class="is-done"><span class="roadmap__dot"></span>Factory reset to seeded data</li>
-          <li class="is-done"><span class="roadmap__dot"></span>Encrypted phone-to-phone sync</li>
-          <li class="is-current"><span class="roadmap__dot"></span>Optional — buy-again suggestions</li>
-        </ul>
       </section>
 
       <dialog id="restore-dialog" class="sheet" aria-labelledby="restore-title">
