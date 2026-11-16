@@ -147,10 +147,7 @@ export function mount(root) {
     let meta = 'Custom meal';
 
     if (recipe) {
-      meta = `${recipe.category} · ${countLabel(
-        recipe.ingredients.length,
-        'ingredient'
-      )} · ${countLabel(entry.servings, 'serving')}`;
+      meta = `${recipe.category} · ${countLabel(recipe.ingredients.length, 'ingredient')}`;
     } else if (entry.recipeId) {
       meta = 'Recipe removed';
     }
@@ -438,10 +435,7 @@ export function mount(root) {
             h(
               'span',
               { class: 'recipe-card__meta' },
-              `${recipe.category} · ${countLabel(
-                recipe.ingredients.length,
-                'ingredient'
-              )} · makes ${recipe.servings}`
+              `${recipe.category} · ${countLabel(recipe.ingredients.length, 'ingredient')}`
             )
           ),
           h('span', { class: 'recipe-card__chevron' }, icon('chevron'))
