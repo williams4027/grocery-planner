@@ -261,8 +261,8 @@ export function mount(root) {
         </button>
       </div>
       <p class="card__note manage-lists-intro">
-        Duplicate a list for another trip, archive lists you are done with, or restore an archived
-        list. Archiving keeps every item.
+        Duplicate a list for another trip, archive lists you are done with, or restore or delete an
+        archived list. Archiving keeps every item.
       </p>
       <div id="manage-lists-body"></div>
       <p id="manage-lists-status" class="sheet__status" role="status" aria-live="polite"></p>
@@ -810,7 +810,9 @@ export function mount(root) {
 
   function renderManageLists() {
     const lists = store.visibleLists();
-    const archived = store.getState().lists.filter((list) => list.archivedAt);
+    const archived = store
+      .getState()
+      .lists.filter((list) => list.archivedAt && !list.deletedAt);
     const active = currentList();
     const nodes = [h('h3', { class: 'manage-section-title' }, 'Your lists')];
 
@@ -913,13 +915,28 @@ export function mount(root) {
                 )
               ),
               h(
-                'button',
-                {
-                  class: 'btn manage-btn',
-                  type: 'button',
-                  dataset: { action: 'restore', listId: list.id },
-                },
-                'Restore'
+                'div',
+                { class: 'manage-row__actions' },
+                h(
+                  'button',
+                  {
+                    class: 'btn manage-btn',
+                    type: 'button',
+                    dataset: { action: 'restore', listId: list.id },
+                  },
+                  'Restore'
+                ),
+                h(
+                  'button',
+                  {
+                    class: 'btn manage-btn manage-btn--danger',
+                    type: 'button',
+                    dataset: { action: 'delete-list', listId: list.id },
+                    'aria-label': `Delete ${list.name} permanently`,
+                    title: 'Delete permanently',
+                  },
+                  'Delete'
+                )
               )
             );
           })
@@ -1627,6 +1644,45 @@ export function mount(root) {
         return;
       }
       showToast(`${restored.name} restored.`);
+      return;
+    }
+
+    if (button.dataset.action === 'delete-list') {
+      const list = store
+        .getState()
+        .lists.find((entry) => entry.id === listId && entry.archivedAt && !entry.deletedAt);
+      if (!list) {
+        refs.manageStatus.textContent = 'Could not find that archived list.';
+        return;
+      }
+
+      const itemCount = store.visibleItems(list).length;
+      if (
+        !window.confirm(
+          `Delete “${list.name}” and its ${itemCount} item${itemCount === 1 ? '' : 's'}? You can undo this.`
+        )
+      ) {
+        return;
+      }
+
+      const deleted = store.deleteList(list.id);
+      if (!deleted) {
+        refs.manageStatus.textContent = 'Could not delete that list.';
+        return;
+      }
+
+      showToast(`Deleted ${deleted.name}.`, {
+        duration: 6000,
+        actionLabel: 'Undo',
+        onAction: () => {
+          const restored = store.undeleteList(deleted.id);
+          if (!restored) {
+            showToast('Could not restore that list.');
+            return;
+          }
+          showToast(`${restored.name} restored to Archived.`);
+        },
+      });
     }
   });
 

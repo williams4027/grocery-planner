@@ -111,6 +111,7 @@ export function createList(name = 'Groceries', { storeKey = 'custom', aisleOrder
     createdAt: timestamp,
     updatedAt: timestamp,
     archivedAt: null,
+    deletedAt: null,
     items: [],
   };
 }
@@ -612,6 +613,7 @@ function normalizeList(input, fallbackAisleOrder = null) {
     createdAt: typeof input.createdAt === 'string' ? input.createdAt : timestamp,
     updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : timestamp,
     archivedAt: typeof input.archivedAt === 'string' ? input.archivedAt : null,
+    deletedAt: typeof input.deletedAt === 'string' ? input.deletedAt : null,
     items,
   };
 }
@@ -689,11 +691,22 @@ export function normalizeState(input) {
     return state;
   }
 
-  const active = state.lists.find(
+  // Deleted lists stay behind as tombstones so a device that still has an
+  // older copy does not bring them back during sync. They never count as a
+  // usable list here.
+  const liveLists = state.lists.filter((list) => !list.deletedAt);
+  if (!liveLists.length) {
+    const list = createList('Groceries');
+    state.lists.push(list);
+    state.settings.activeListId = list.id;
+    return state;
+  }
+
+  const active = liveLists.find(
     (list) => list.id === state.settings.activeListId && !list.archivedAt
   );
   if (!active) {
-    const firstVisible = state.lists.find((list) => !list.archivedAt) || state.lists[0];
+    const firstVisible = liveLists.find((list) => !list.archivedAt) || liveLists[0];
     state.settings.activeListId = firstVisible.id;
   }
 
@@ -701,7 +714,9 @@ export function normalizeState(input) {
 }
 
 export function summarizeState(input) {
-  const lists = input && Array.isArray(input.lists) ? input.lists : [];
+  const lists = (input && Array.isArray(input.lists) ? input.lists : []).filter(
+    (list) => list && !list.deletedAt
+  );
   const items = lists.reduce((count, list) => {
     if (!list || !Array.isArray(list.items)) return count;
     return (

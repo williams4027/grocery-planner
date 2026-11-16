@@ -1952,6 +1952,12 @@ body.sheet-open {
   font-size: 13px;
 }
 
+.manage-btn--danger:hover,
+.manage-btn--danger:focus-visible {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
 .manage-empty {
   margin: 8px 0 0;
   padding: 12px;

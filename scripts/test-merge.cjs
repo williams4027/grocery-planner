@@ -237,6 +237,70 @@ const assert = require('node:assert/strict');
     assert.equal(merged.recipes[0].deletedAt, '2026-01-03T00:00:00.000Z');
   }
 
+  // A newer archived-list deletion wins over an older archived copy, and a
+  // newer live copy on the other phone revives it.
+  {
+    const local = makeState({
+      lists: [
+        {
+          id: 'lst1',
+          name: 'Groceries',
+          createdAt: CREATED,
+          updatedAt: CREATED,
+          items: [],
+        },
+        {
+          id: 'lst2',
+          name: 'Costco',
+          createdAt: CREATED,
+          updatedAt: '2026-01-02T00:00:00.000Z',
+          archivedAt: '2026-01-02T00:00:00.000Z',
+          items: [],
+        },
+      ],
+    });
+
+    const deleted = clone(local);
+    deleted.lists[1].updatedAt = '2026-01-03T00:00:00.000Z';
+    deleted.lists[1].deletedAt = '2026-01-03T00:00:00.000Z';
+
+    const merged = mergeStates(local, deleted);
+    assert.equal(merged.lists.length, 2);
+    assert.equal(merged.lists[1].deletedAt, '2026-01-03T00:00:00.000Z');
+    assert.equal(merged.settings.activeListId, 'lst1');
+    assert.equal(model.summarizeState(merged).lists, 1);
+
+    const revived = clone(deleted);
+    revived.lists[1].updatedAt = '2026-01-04T00:00:00.000Z';
+    revived.lists[1].deletedAt = null;
+
+    const revivedMerge = mergeStates(deleted, revived);
+    assert.equal(revivedMerge.lists[1].deletedAt, null);
+    assert.equal(model.summarizeState(revivedMerge).lists, 2);
+  }
+
+  // Deleting the last remaining list leaves a fresh grocery list behind.
+  {
+    const state = makeState({
+      lists: [
+        {
+          id: 'lst1',
+          name: 'Old trip',
+          createdAt: CREATED,
+          updatedAt: '2026-01-03T00:00:00.000Z',
+          archivedAt: '2026-01-02T00:00:00.000Z',
+          deletedAt: '2026-01-03T00:00:00.000Z',
+          items: [],
+        },
+      ],
+    });
+
+    const live = state.lists.filter((list) => !list.deletedAt);
+    assert.equal(live.length, 1);
+    assert.equal(live[0].name, 'Groceries');
+    assert.equal(state.settings.activeListId, live[0].id);
+  }
+
   // Equal timestamps resolve identically regardless of merge direction.
   {
     const local = makeState();

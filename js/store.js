@@ -121,19 +121,21 @@ export function getState() {
 export function getActiveList() {
   const activeId = state.settings.activeListId;
   return (
-    state.lists.find((list) => list.id === activeId && !list.archivedAt) ||
-    state.lists.find((list) => !list.archivedAt) ||
-    state.lists[0] ||
+    state.lists.find((list) => list.id === activeId && !list.archivedAt && !list.deletedAt) ||
+    state.lists.find((list) => !list.archivedAt && !list.deletedAt) ||
+    state.lists.find((list) => !list.deletedAt) ||
     null
   );
 }
 
 export function visibleLists() {
-  return state.lists.filter((list) => !list.archivedAt);
+  return state.lists.filter((list) => !list.archivedAt && !list.deletedAt);
 }
 
 export function setActiveList(listId) {
-  const list = state.lists.find((entry) => entry.id === listId && !entry.archivedAt);
+  const list = state.lists.find(
+    (entry) => entry.id === listId && !entry.archivedAt && !entry.deletedAt
+  );
   if (!list || state.settings.activeListId === list.id) return false;
 
   state.settings.activeListId = list.id;
@@ -293,7 +295,7 @@ export function duplicateRecipe(recipeId) {
 export function addRecipeToList(recipeId, listId) {
   const recipe = getRecipe(recipeId);
   const list = state.lists.find(
-    (entry) => entry.id === listId && !entry.archivedAt
+    (entry) => entry.id === listId && !entry.archivedAt && !entry.deletedAt
   );
   if (!recipe || !list) return 0;
 
@@ -335,7 +337,9 @@ export function getPlanEntry(entryId) {
 
 function resolvePlanList(listId) {
   return listId
-    ? state.lists.find((entry) => entry.id === listId && !entry.archivedAt)
+    ? state.lists.find(
+        (entry) => entry.id === listId && !entry.archivedAt && !entry.deletedAt
+      )
     : getActiveList();
 }
 
@@ -957,7 +961,7 @@ export function archiveList(listId) {
   if (!list) return null;
 
   const remaining = state.lists.filter(
-    (entry) => !entry.archivedAt && entry.id !== list.id
+    (entry) => !entry.archivedAt && !entry.deletedAt && entry.id !== list.id
   );
   if (!remaining.length) return null;
 
@@ -973,12 +977,49 @@ export function archiveList(listId) {
 }
 
 export function restoreList(listId) {
-  const list = state.lists.find((entry) => entry.id === listId && entry.archivedAt);
+  const list = state.lists.find(
+    (entry) => entry.id === listId && entry.archivedAt && !entry.deletedAt
+  );
   if (!list) return null;
 
   list.archivedAt = null;
   list.updatedAt = nowIso();
   state.settings.activeListId = list.id;
+  commit();
+  return list;
+}
+
+/**
+ * Deletes an archived list for good. The row is kept as a tombstone (with
+ * deletedAt) so device sync cannot resurrect it from an older copy.
+ */
+export function deleteList(listId) {
+  const list = state.lists.find(
+    (entry) => entry.id === listId && entry.archivedAt && !entry.deletedAt
+  );
+  if (!list) return null;
+
+  const timestamp = nowIso();
+  list.deletedAt = timestamp;
+  list.updatedAt = timestamp;
+  if (state.settings.activeListId === list.id) {
+    const fallback =
+      state.lists.find((entry) => !entry.archivedAt && !entry.deletedAt) ||
+      state.lists.find((entry) => !entry.deletedAt);
+    if (fallback) state.settings.activeListId = fallback.id;
+  }
+
+  commit();
+  return list;
+}
+
+/** Undoes deleteList; the list goes back to the archived section. */
+export function undeleteList(listId) {
+  const list = state.lists.find((entry) => entry.id === listId && entry.deletedAt);
+  if (!list) return null;
+
+  list.deletedAt = null;
+  list.updatedAt = nowIso();
   commit();
   return list;
 }
