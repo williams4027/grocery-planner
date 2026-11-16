@@ -267,6 +267,33 @@ const assert = require('node:assert/strict');
     assert.ok(statesEqual(first, clone(first)));
   }
 
+  // Ingredient lines with a trailing quantity should keep the name and extract the number.
+  {
+    const apples = model.parseIngredientLine('apples 8');
+    assert.equal(apples.name, 'apples');
+    assert.equal(apples.qty, 8);
+    assert.equal(apples.unit, '');
+
+    const fractional = model.parseIngredientLine('apples 1 1/2');
+    assert.equal(fractional.name, 'apples');
+    assert.equal(fractional.qty, 1.5);
+
+    const withUnit = model.parseIngredientLine('apples 2 lbs');
+    assert.equal(withUnit.name, 'apples');
+    assert.equal(withUnit.qty, 2);
+    assert.equal(withUnit.unit, 'lbs');
+
+    // Existing leading-quantity parsing and "no recognised unit" behavior still apply.
+    const leading = model.parseIngredientLine('1 1/2 cups chopped carrots');
+    assert.equal(leading.name, 'chopped carrots');
+    assert.equal(leading.qty, 1.5);
+    assert.equal(leading.unit, 'cups');
+
+    const bare = model.parseIngredientLine('1 small onion');
+    assert.equal(bare.name, '1 small onion');
+    assert.equal(bare.qty, null);
+  }
+
   console.log('merge tests passed');
 })().catch((error) => {
   console.error(error);

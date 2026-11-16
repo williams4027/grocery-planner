@@ -171,8 +171,12 @@ const UNICODE_FRACTIONS = {
   '⅞': 0.875,
 };
 
-const INGREDIENT_UNITS =
-  /^(cups?|tbsp|tsp|lbs?|oz|g|kg|ml|l|cloves?|cans?|cartons?|slices?|bunch(?:es)?|bags?|packs?|jars?|bottles?|boxes?|pinch(?:es)?|dash(?:es)?|sticks?|heads?|sprigs?|fillets?|pieces?)\b\s+(.+)$/i;
+const INGREDIENT_UNIT_LIST =
+  'cups?|tbsp|tsp|lbs?|oz|g|kg|ml|l|cloves?|cans?|cartons?|slices?|bunch(?:es)?|bags?|packs?|jars?|bottles?|boxes?|pinch(?:es)?|dash(?:es)?|sticks?|heads?|sprigs?|fillets?|pieces?';
+
+const INGREDIENT_UNITS = new RegExp(`^(${INGREDIENT_UNIT_LIST})\\b\\s+(.+)$`, 'i');
+
+const QUANTITY_TOKEN = String.raw`\d+\s+\d+\/\d+|\d+\s+[¼½¾⅓⅔⅛⅜⅝⅞]|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]`;
 
 function quantityValue(token) {
   if (UNICODE_FRACTIONS[token] !== undefined) return UNICODE_FRACTIONS[token];
@@ -191,10 +195,35 @@ function quantityValue(token) {
   return Number(token);
 }
 
+function parseTrailingQuantity(text) {
+  const withUnit = text.match(
+    new RegExp(`^(.+?)\\s+(${QUANTITY_TOKEN})\\s+(${INGREDIENT_UNIT_LIST})$`, 'i')
+  );
+  if (withUnit) {
+    return {
+      name: withUnit[1].trim(),
+      qty: normalizeQty(quantityValue(withUnit[2])),
+      unit: withUnit[3],
+    };
+  }
+
+  const bare = text.match(new RegExp(`^(.+?)\\s+(${QUANTITY_TOKEN})$`));
+  if (bare) {
+    return {
+      name: bare[1].trim(),
+      qty: normalizeQty(quantityValue(bare[2])),
+      unit: '',
+    };
+  }
+
+  return null;
+}
+
 /**
  * Splits a recipe line like "1 1/2 cups chopped carrots" into quantity, unit,
  * and the item name used by the grocery list. Lines without a recognised unit
  * stay whole, so "1 small onion" is not mangled into a bare "small onion".
+ * A trailing count such as "apples 8" is also extracted, with or without a unit.
  */
 export function parseIngredientLine(line) {
   const raw = String(line || '')
@@ -211,7 +240,7 @@ export function parseIngredientLine(line) {
   const quantityMatch = text.match(
     /^(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞])\s+(.+)$/
   );
-  if (!quantityMatch) return { name: raw, qty: null, unit: '' };
+  if (!quantityMatch) return parseTrailingQuantity(raw) || { name: raw, qty: null, unit: '' };
 
   const qty = normalizeQty(quantityValue(quantityMatch[1]));
   const unitMatch = quantityMatch[2].match(INGREDIENT_UNITS);
