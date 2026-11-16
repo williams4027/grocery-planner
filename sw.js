@@ -24,6 +24,7 @@ const SHELL_ASSETS = [
   './js/calendar.js',
   './js/config.js',
   './js/dates.js',
+  './js/keyboard.js',
   './js/model.js',
   './js/merge.js',
   './js/store.js',

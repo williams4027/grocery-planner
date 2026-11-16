@@ -2,6 +2,7 @@
 
 import { APP_NAME } from './config.js';
 import * as store from './store.js';
+import { initKeyboardDismissal } from './keyboard.js';
 import { initPwa } from './pwa.js';
 import { initSync, syncOnTabNavigation } from './sync.js';
 import { mount as mountPlan } from './views/plan.js';
@@ -110,4 +111,5 @@ window.addEventListener('online', updateNetworkStatus);
 window.addEventListener('offline', updateNetworkStatus);
 
 updateNetworkStatus();
+initKeyboardDismissal();
 boot();
