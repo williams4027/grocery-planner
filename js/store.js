@@ -4,7 +4,7 @@
  * with a short debounce. Every mutation notifies subscribers synchronously.
  */
 
-import { AISLES, RECIPE_CATEGORIES, STORAGE } from './config.js';
+import { AISLES, RECIPE_CATEGORIES, STORAGE, STORE_PRESETS } from './config.js';
 import { createBackup as buildBackup, parseBackup, readBackup } from './backup.js';
 import {
   createEmptyState,
@@ -19,6 +19,7 @@ import {
   nowIso,
   suggestAisle,
   summarizeState,
+  uid,
 } from './model.js';
 import { RECIPE_SEED_VERSION, SEED_RECIPES } from './seed-recipes.js';
 
@@ -36,6 +37,23 @@ const RECIPE_CATEGORY_ORDER = new Map(
 const ITEM_MERGE_VERSION = 2;
 let saveTimer = null;
 let saveChain = Promise.resolve();
+
+/* Device-local list versions. Kept out of the state document so backups and
+ * sync never carry device history. */
+let listHistory = { version: 1, lists: {} };
+let historyDirty = false;
+let historyTimer = null;
+
+const HISTORY_LIMIT = 20;
+const HISTORY_MAX_LISTS = 40;
+/* Repeated tweaks of the same kind share one "before" revision, so a whole
+ * shopping session or a burst of edits does not push out older versions. */
+const HISTORY_WINDOWS = {
+  check: 15 * 60 * 1000,
+  item: 3 * 60 * 1000,
+  plan: 3 * 60 * 1000,
+  structure: 0,
+};
 
 /* ---------- Public API ---------- */
 
@@ -99,6 +117,7 @@ export async function init() {
   ensureRecipeSeed();
   ensureListDedupe();
   ensureRecipeOrder();
+  await loadListHistory();
   ready = true;
   notify();
   scheduleSave();
@@ -299,6 +318,8 @@ export function addRecipeToList(recipeId, listId) {
   );
   if (!recipe || !list) return 0;
 
+  captureListRevision(list.id, 'Before adding a recipe', { group: 'item' });
+
   let count = 0;
   for (const ingredient of recipe.ingredients) {
     const item = createItem({
@@ -350,6 +371,8 @@ function resolvePlanList(listId) {
  * planned more than once and its contributions stay separate.
  */
 function applyRecipeToPlan(entry, recipe, list) {
+  captureListRevision(list.id, 'Before changing meal plan ingredients', { group: 'plan' });
+
   const removed = removePlanItems(entry.id);
   const preserved = new Set(
     list.items
@@ -576,11 +599,14 @@ export function inspectBackup(input) {
 export function importBackup(input) {
   const parsed = typeof input === 'string' ? readBackup(input) : parseBackup(input);
 
+  captureAllLists('Before restoring a backup', { group: 'structure', force: true });
+
   state = parsed.state;
   if (parsed.exportedAt) state.settings.lastExportAt = parsed.exportedAt;
   ensureListDedupe();
   ensureRecipeOrder();
   reconcileListItems();
+  if (pruneListHistory()) scheduleHistorySave();
   loadError = '';
   if (storageMode !== 'memory') saveError = '';
   commit();
@@ -616,6 +642,7 @@ export async function resetToSeedData() {
   ensureRecipeSeed();
   ensureListDedupe();
   ensureRecipeOrder();
+  if (pruneListHistory()) scheduleHistorySave();
   loadError = '';
   if (storageMode !== 'memory') saveError = '';
   commit();
@@ -637,6 +664,7 @@ export function addItem(listId, input) {
   if (!item.name) return null;
 
   const explicitAisle = AISLES.includes(input.aisle) ? input.aisle : null;
+  captureListRevision(list.id, 'Before adding an item', { group: 'item' });
   const result = addOrMergeItem(list, item);
   if (explicitAisle && result.merged) result.item.aisle = explicitAisle;
   touchList(list);
@@ -662,6 +690,8 @@ export function updateItem(listId, itemId, input = {}) {
       ? input.aisle
       : suggestAisle(name);
 
+  captureListRevision(listId, 'Before editing an item', { group: 'item' });
+
   item.name = name;
   item.qty = nextQty;
   item.unit = nextUnit;
@@ -684,7 +714,16 @@ export function setItemChecked(listId, itemId, checked) {
   const item = findItem(listId, itemId);
   if (!item) return false;
 
-  item.checked = Boolean(checked);
+  const nextChecked = Boolean(checked);
+  if (item.checked === nextChecked) return true;
+
+  captureListRevision(
+    listId,
+    nextChecked ? 'Before picking up items' : 'Before unpicking items',
+    { group: 'check' }
+  );
+
+  item.checked = nextChecked;
   item.updatedAt = nowIso();
   touchListById(listId);
   commit();
@@ -694,6 +733,8 @@ export function setItemChecked(listId, itemId, checked) {
 export function deleteItem(listId, itemId) {
   const item = findItem(listId, itemId);
   if (!item) return false;
+
+  captureListRevision(listId, 'Before deleting an item', { group: 'item' });
 
   item.deletedAt = nowIso();
   item.updatedAt = item.deletedAt;
@@ -722,6 +763,9 @@ export function moveItem(listId, itemId, targetListId) {
   const existing = findVisibleMatch(target, item);
   let movedItem = item;
   let merged = false;
+
+  captureListRevision(source.id, 'Before moving items', { group: 'item' });
+  if (existing) captureListRevision(target.id, 'Before moving items', { group: 'item' });
 
   if (existing) {
     // Keep the row checked only when both copies were already picked up.
@@ -774,6 +818,13 @@ export function moveItems(listId, itemIds, targetListId) {
   const selected = source.items.filter(
     (item) => ids.has(item.id) && !item.deletedAt && item.name
   );
+  if (!selected.length) {
+    return { moved: 0, merged: 0, sourceList: source, targetList: target };
+  }
+
+  const willMerge = selected.some((item) => findVisibleMatch(target, item));
+  captureListRevision(source.id, 'Before moving items', { group: 'item' });
+  if (willMerge) captureListRevision(target.id, 'Before moving items', { group: 'item' });
 
   for (const item of selected) {
     const existing = findVisibleMatch(target, item);
@@ -817,13 +868,18 @@ export function deleteItems(listId, itemIds) {
   const deletedIds = [];
   if (!ids.size) return { deleted: 0, itemIds: deletedIds, list };
 
+  const targets = list.items.filter(
+    (item) => !item.deletedAt && item.name && ids.has(item.id)
+  );
+  if (!targets.length) return { deleted: 0, itemIds: deletedIds, list };
+
+  captureListRevision(listId, 'Before deleting items', { group: 'item' });
+
   const timestamp = nowIso();
-  for (const item of list.items) {
-    if (!item.deletedAt && item.name && ids.has(item.id)) {
-      item.deletedAt = timestamp;
-      item.updatedAt = timestamp;
-      deletedIds.push(item.id);
-    }
+  for (const item of targets) {
+    item.deletedAt = timestamp;
+    item.updatedAt = timestamp;
+    deletedIds.push(item.id);
   }
 
   if (deletedIds.length) {
@@ -845,13 +901,16 @@ export function restoreItems(listId, itemIds) {
   const restoredIds = [];
   if (!ids.size) return { restored: 0, itemIds: restoredIds, list };
 
+  const targets = list.items.filter((item) => item.deletedAt && ids.has(item.id));
+  if (!targets.length) return { restored: 0, itemIds: restoredIds, list };
+
+  captureListRevision(listId, 'Before restoring items', { group: 'item' });
+
   const timestamp = nowIso();
-  for (const item of list.items) {
-    if (item.deletedAt && ids.has(item.id)) {
-      item.deletedAt = null;
-      item.updatedAt = timestamp;
-      restoredIds.push(item.id);
-    }
+  for (const item of targets) {
+    item.deletedAt = null;
+    item.updatedAt = timestamp;
+    restoredIds.push(item.id);
   }
 
   if (restoredIds.length) {
@@ -870,6 +929,10 @@ export function clearList(listId) {
   const itemIds = list.items
     .filter((item) => !item.deletedAt && item.name)
     .map((item) => item.id);
+  if (!itemIds.length) return { deleted: 0, itemIds: [], list, cleared: 0 };
+
+  captureListRevision(list.id, 'Before clearing the list', { group: 'structure' });
+
   const result = deleteItems(listId, itemIds);
   return result ? { ...result, cleared: result.deleted } : null;
 }
@@ -880,6 +943,8 @@ export function restoreItem(listId, itemId) {
 
   const item = list.items.find((entry) => entry.id === itemId && entry.deletedAt);
   if (!item) return null;
+
+  captureListRevision(list.id, 'Before restoring an item', { group: 'item' });
 
   item.deletedAt = null;
   item.updatedAt = nowIso();
@@ -901,6 +966,8 @@ export function updateListAisleOrder(listId, aisleOrder) {
 
   if (unchanged) return false;
 
+  captureListRevision(list.id, 'Before changing aisle order', { group: 'structure' });
+
   list.aisleOrder = next;
   touchList(list);
   commit();
@@ -914,6 +981,8 @@ export function renameList(listId, name) {
     .replace(/\s+/g, ' ');
 
   if (!list || !cleanName || cleanName === list.name) return false;
+
+  captureListRevision(list.id, 'Before renaming the list', { group: 'structure' });
 
   list.name = cleanName;
   touchList(list);
@@ -1024,6 +1093,120 @@ export function undeleteList(listId) {
   return list;
 }
 
+/**
+ * Device-local versions for one list, newest first. Each entry is a summary
+ * plus the item rows as they looked at that moment. History never leaves this
+ * device and is not part of backups or sync.
+ */
+export function getListHistory(listId) {
+  const record = listHistory.lists[listId];
+  if (!record || !Array.isArray(record.revisions)) return [];
+
+  return record.revisions.map((revision) => {
+    const items = Array.isArray(revision.items) ? revision.items : [];
+    return {
+      id: revision.id,
+      savedAt: revision.savedAt,
+      label: revision.label,
+      itemCount: items.length,
+      checkedCount: items.filter((item) => item.checked).length,
+      items: items.map((item) => ({ ...item })),
+    };
+  });
+}
+
+/** Replaces a list with a saved version. The pre-restore version is saved too. */
+export function restoreListRevision(listId, revisionId) {
+  const list = state.lists.find((entry) => entry.id === listId && !entry.deletedAt);
+  const record = listHistory.lists[listId];
+  const revision =
+    record && Array.isArray(record.revisions)
+      ? record.revisions.find((entry) => entry.id === revisionId)
+      : null;
+  if (!list || !revision) return null;
+
+  const undoRevisionId = captureListRevision(listId, 'Before restore', {
+    group: 'structure',
+    force: true,
+  });
+
+  const cleanName = String(revision.name || '')
+    .trim()
+    .replace(/\s+/g, ' ');
+  if (cleanName) list.name = cleanName;
+
+  list.storeKey = Object.prototype.hasOwnProperty.call(STORE_PRESETS, revision.storeKey)
+    ? revision.storeKey
+    : 'custom';
+  list.aisleOrder = normalizeAisleOrder(revision.aisleOrder);
+
+  // Ids used by other lists must never be taken over by a restore.
+  const liveIdsElsewhere = new Set();
+  for (const other of state.lists) {
+    if (other.id === list.id) continue;
+    for (const item of other.items) {
+      if (!item.deletedAt) liveIdsElsewhere.add(item.id);
+    }
+  }
+
+  const restoredIds = new Set();
+  const restoredItems = (Array.isArray(revision.items) ? revision.items : []).map((saved) => {
+    const item = createItem({
+      name: saved.name,
+      qty: saved.qty,
+      unit: saved.unit,
+      aisle: saved.aisle,
+      sourceRecipeId: saved.sourceRecipeId,
+      sourcePlanEntryId: saved.sourcePlanEntryId,
+      planContributions: saved.planContributions,
+    });
+
+    if (
+      typeof saved.id === 'string' &&
+      saved.id &&
+      !liveIdsElsewhere.has(saved.id) &&
+      !restoredIds.has(saved.id)
+    ) {
+      item.id = saved.id;
+    }
+
+    item.checked = Boolean(saved.checked);
+    item.note = typeof saved.note === 'string' ? saved.note : null;
+    if (typeof saved.addedAt === 'string' && saved.addedAt) item.addedAt = saved.addedAt;
+    restoredIds.add(item.id);
+    return item;
+  });
+
+  // Keep tombstones so a stale copy on the partner phone cannot resurrect a
+  // deleted row, but let a restored row reclaim its own old tombstone.
+  const tombstones = list.items.filter(
+    (item) => item.deletedAt && !restoredIds.has(item.id)
+  );
+
+  // Rows that exist now but not in the saved version are deleted, not dropped,
+  // so the deletion propagates through sync.
+  const timestamp = nowIso();
+  const removed = list.items.filter(
+    (item) => !item.deletedAt && item.name && !restoredIds.has(item.id)
+  );
+  for (const item of removed) {
+    item.deletedAt = timestamp;
+    item.updatedAt = timestamp;
+  }
+
+  list.items = [...restoredItems, ...tombstones, ...removed];
+
+  touchList(list);
+  commit();
+
+  return {
+    list,
+    restored: restoredItems.length,
+    undoRevisionId,
+    revision: { id: revision.id, savedAt: revision.savedAt, label: revision.label },
+  };
+}
+
 /** Forces a write (used on pagehide / visibilitychange). */
 export async function flush() {
   if (!ready) return;
@@ -1031,7 +1214,12 @@ export async function flush() {
     clearTimeout(saveTimer);
     saveTimer = null;
   }
+  if (historyTimer) {
+    clearTimeout(historyTimer);
+    historyTimer = null;
+  }
   await persist();
+  await persistHistory();
 }
 
 /* ---------- Internals ---------- */
@@ -1172,6 +1360,14 @@ function removePlanItems(planEntryId) {
 
   for (const list of state.lists) {
     let touched = false;
+
+    const affected = list.items.some((item) => {
+      if (item.deletedAt || item.checked) return false;
+      return Object.prototype.hasOwnProperty.call(planContributionMap(item), planEntryId);
+    });
+    if (affected) {
+      captureListRevision(list.id, 'Before changing meal plan ingredients', { group: 'plan' });
+    }
 
     for (const item of list.items) {
       if (item.deletedAt) continue;
@@ -1639,6 +1835,200 @@ function preserveUnreadableData(raw) {
   } catch (error) {
     return false;
   }
+}
+
+/* ---------- List history ---------- */
+
+function snapshotList(list) {
+  return {
+    name: list.name,
+    storeKey: list.storeKey,
+    aisleOrder: Array.isArray(list.aisleOrder) ? [...list.aisleOrder] : [],
+    items: list.items
+      .filter((item) => !item.deletedAt && item.name)
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        qty: item.qty,
+        unit: item.unit,
+        aisle: item.aisle,
+        checked: Boolean(item.checked),
+        note: typeof item.note === 'string' ? item.note : null,
+        sourceRecipeId: item.sourceRecipeId || null,
+        sourcePlanEntryId: item.sourcePlanEntryId || null,
+        planContributions:
+          item.planContributions && typeof item.planContributions === 'object'
+            ? { ...item.planContributions }
+            : null,
+        addedAt: item.addedAt || null,
+      })),
+  };
+}
+
+/**
+ * Saves the list as it looks *before* an edit. Returns the new revision id, or
+ * null when the same version is already saved or a burst of the same kind of
+ * edit is still coalescing.
+ */
+function captureListRevision(listId, label, { group = 'item', force = false } = {}) {
+  const list = state.lists.find((entry) => entry.id === listId && !entry.deletedAt);
+  if (!list) return null;
+
+  const snapshot = snapshotList(list);
+  const fingerprint = JSON.stringify(snapshot);
+  const record = listHistory.lists[listId] || { revisions: [] };
+  const latest = record.revisions[0];
+
+  if (latest) {
+    if (latest.fingerprint === fingerprint) return null;
+
+    const windowMs = force ? 0 : HISTORY_WINDOWS[group] || 0;
+    const age = Date.now() - Date.parse(latest.savedAt || '');
+    if (windowMs && latest.group === group && Number.isFinite(age) && age >= 0 && age < windowMs) {
+      return null;
+    }
+  }
+
+  const revision = {
+    id: uid('rev'),
+    savedAt: nowIso(),
+    label,
+    group,
+    fingerprint,
+    ...snapshot,
+  };
+
+  record.revisions = [revision, ...record.revisions].slice(0, HISTORY_LIMIT);
+  listHistory.lists[listId] = record;
+  pruneListHistory();
+  scheduleHistorySave();
+  return revision.id;
+}
+
+function captureAllLists(label, options) {
+  for (const list of state.lists) {
+    if (!list.deletedAt) captureListRevision(list.id, label, options);
+  }
+}
+
+/** Keeps history bounded and drops versions for lists the backup replaced. */
+function pruneListHistory() {
+  const knownIds = new Set(state.lists.map((entry) => entry.id));
+  let changed = false;
+
+  for (const id of Object.keys(listHistory.lists)) {
+    if (!knownIds.has(id)) {
+      delete listHistory.lists[id];
+      changed = true;
+    }
+  }
+
+  const ids = Object.keys(listHistory.lists);
+  if (ids.length > HISTORY_MAX_LISTS) {
+    ids
+      .sort((a, b) => {
+        const timeA = (listHistory.lists[a].revisions[0] || {}).savedAt || '';
+        const timeB = (listHistory.lists[b].revisions[0] || {}).savedAt || '';
+        return timeB.localeCompare(timeA);
+      })
+      .slice(HISTORY_MAX_LISTS)
+      .forEach((id) => {
+        delete listHistory.lists[id];
+        changed = true;
+      });
+  }
+
+  return changed;
+}
+
+async function loadListHistory() {
+  let stored = null;
+
+  try {
+    if (database) {
+      stored = await idbGet(database, STORAGE.historyKey);
+    } else {
+      const raw = localStorage.getItem(
+        `${STORAGE.metaLocalStoragePrefix}${STORAGE.historyKey}`
+      );
+      stored = raw ? JSON.parse(raw) : null;
+    }
+  } catch (error) {
+    console.warn('Could not read saved list versions.', error);
+    return;
+  }
+
+  if (
+    !stored ||
+    typeof stored !== 'object' ||
+    !stored.lists ||
+    typeof stored.lists !== 'object'
+  ) {
+    return;
+  }
+
+  const knownIds = new Set(state.lists.map((entry) => entry.id));
+  const lists = {};
+
+  for (const [listId, record] of Object.entries(stored.lists)) {
+    if (!knownIds.has(listId) || !record || !Array.isArray(record.revisions)) continue;
+
+    const revisions = record.revisions
+      .filter(
+        (revision) =>
+          revision &&
+          typeof revision.id === 'string' &&
+          typeof revision.fingerprint === 'string' &&
+          Array.isArray(revision.items)
+      )
+      .slice(0, HISTORY_LIMIT)
+      .map((revision) => ({
+        ...revision,
+        savedAt: typeof revision.savedAt === 'string' ? revision.savedAt : nowIso(),
+        label: typeof revision.label === 'string' ? revision.label : 'Earlier version',
+        group: typeof revision.group === 'string' ? revision.group : 'structure',
+      }));
+
+    if (revisions.length) lists[listId] = { revisions };
+  }
+
+  listHistory = { version: 1, lists };
+}
+
+function scheduleHistorySave() {
+  historyDirty = true;
+  if (!ready || storageMode === 'memory') return;
+
+  if (historyTimer) clearTimeout(historyTimer);
+  historyTimer = setTimeout(() => {
+    historyTimer = null;
+    persistHistory();
+  }, 400);
+}
+
+function persistHistory() {
+  if (!historyDirty || !ready || storageMode === 'memory') return Promise.resolve();
+
+  historyDirty = false;
+  const payload = listHistory;
+
+  saveChain = saveChain.then(async () => {
+    try {
+      if (database) {
+        await idbPutKey(database, STORAGE.historyKey, payload);
+      } else {
+        localStorage.setItem(
+          `${STORAGE.metaLocalStoragePrefix}${STORAGE.historyKey}`,
+          JSON.stringify(payload)
+        );
+      }
+    } catch (error) {
+      historyDirty = true;
+      console.error('Could not save list versions.', error);
+    }
+  });
+
+  return saveChain;
 }
 
 /* ---------- IndexedDB ---------- */

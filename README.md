@@ -18,9 +18,10 @@ be installed from Safari on an iPhone.
 Status: **All core features are complete** — per-store lists, Google Calendar trip export, seeded
 recipes with ordering and duplication, backup and restore, a continuous meal-plan list, a free-form
 ideas page for future weeks, shopping/list-management polish, quantity merging, cross-list moves, a
-Google Drive backup search shortcut, factory reset to seeded data, a guard against accidental
-double-tap zoom, rotating heart-filled acknowledgements, and optional end-to-end encrypted sync
-between two phones. See [PLAN.md](./PLAN.md) for the roadmap and optional backlog.
+Google Drive backup search shortcut, factory reset to seeded data, device-local list version history
+with restore, a guard against accidental double-tap zoom, rotating heart-filled acknowledgements,
+and optional end-to-end encrypted sync between two phones. See [PLAN.md](./PLAN.md) for the roadmap
+and optional backlog.
 
 ## Quick start
 
@@ -101,7 +102,7 @@ js/model.js             factories, aisle keyword map, ingredient parsing, normal
 js/dates.js             local date keys, week starts, and day arithmetic
 js/backup.js            JSON backup format, parsing, and validation
 js/calendar.js          pure Google Calendar trip-detail and URL builders
-js/store.js             state container, IndexedDB/localStorage persistence, actions
+js/store.js             state container, IndexedDB/localStorage persistence, list history, actions
 js/merge.js             deterministic per-entity merge for sync
 js/sync.js              encrypted relay client, polling, snapshots, disconnect
 js/seed-recipes.js      recipes seeded from the meal-planning sheet
@@ -142,9 +143,15 @@ PLAN.md                 product plan, data model, phase breakdown
   rows combine quantities), delete them together, or clear the whole list. Delete and clear both
   offer **Undo**; clearing a list asks for confirmation first.
 - Rename the active list inline. Open **Manage lists** to reorder that list’s aisles for the route
-  through a particular store, duplicate a list (including its checked items), archive a list
-  without deleting anything, or restore an archived list later. The last visible list cannot be
-  archived.
+  through a particular store, view that list’s saved versions, duplicate a list (including its
+  checked items), archive a list without deleting anything, or restore an archived list later. The
+  last visible list cannot be archived.
+- **List history** keeps up to 20 versions of each list on the device automatically, newest first,
+  with a preview of the items in each. Open **Manage lists → History** and tap **Restore** to bring
+  back a version; the pre-restore version is saved too, so the change can be undone from the toast.
+  Repeated tweaks of the same kind (for example, checking off a trip’s items) share one saved
+  version so older entries are not pushed out. History is device-local and deliberately excluded
+  from backups and sync.
 - **Add trip to Google Calendar** opens a prefilled event with the list in the description. It is a
   link, not an account connection: you pick the title/date/time, then review and save it in Google
   Calendar.

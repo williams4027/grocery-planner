@@ -87,5 +87,6 @@ export const STORAGE = {
   cheerKey: 'grocery-planner:cheer:v1',
   syncKey: 'sync-credentials',
   preSyncKey: 'pre-sync-snapshot',
+  historyKey: 'list-history',
   metaLocalStoragePrefix: 'grocery-planner:meta:',
 };

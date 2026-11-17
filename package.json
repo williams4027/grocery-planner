@@ -8,6 +8,6 @@
     "dev": "node dev-server.cjs",
     "icons": "node scripts/make-icons.cjs",
     "check": "for f in js/*.js js/views/*.js sw.js worker/src/*.js; do node --check \"$f\" || exit 1; done && node --check dev-server.cjs && node --check scripts/make-icons.cjs",
-    "test": "node scripts/test-merge.cjs"
+    "test": "node scripts/test-merge.cjs && node scripts/test-history.cjs"
   }
 }

@@ -8,11 +8,17 @@ import { createSheetController } from '../sheet.js';
 import { h, icon, ICONS, showCheer, showToast, formatQuantity } from '../ui.js';
 
 const PRESET_ORDER = ['kroger', 'wholefoods', 'costco', 'custom'];
+const REVISION_TIME_FORMAT = new Intl.DateTimeFormat(undefined, {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
 
 export function mount(root) {
   let renaming = false;
   let selectedPreset = 'custom';
   let selectedAisleListId = null;
+  let historyListId = null;
+  let expandedRevisionId = null;
   let lastActiveChipId = null;
   let editingItemId = null;
   let focusQtyOnOpen = false;
@@ -261,11 +267,28 @@ export function mount(root) {
         </button>
       </div>
       <p class="card__note manage-lists-intro">
-        Duplicate a list for another trip, archive lists you are done with, or restore or delete an
-        archived list. Archiving keeps every item.
+        Duplicate a list for another trip, view a list&rsquo;s saved versions, archive lists you
+        are done with, or restore or delete an archived list. Archiving keeps every item.
       </p>
       <div id="manage-lists-body"></div>
       <p id="manage-lists-status" class="sheet__status" role="status" aria-live="polite"></p>
+    </dialog>
+
+    <dialog id="history-dialog" class="sheet history-sheet" aria-labelledby="history-title">
+      <div class="sheet__handle" aria-hidden="true"></div>
+      <div class="sheet__head">
+        <h2 id="history-title">List history</h2>
+        <button class="sheet__close" id="history-close" type="button" aria-label="Close">
+          ${ICONS.close}
+        </button>
+      </div>
+      <p class="card__note history-intro">
+        Versions are saved on this device before the list changes. Restoring one replaces the
+        list as it is now, and the version from just before the restore is saved too. History is
+        not included in backups or sync.
+      </p>
+      <div id="history-body"></div>
+      <p id="history-status" class="sheet__status" role="status" aria-live="polite"></p>
     </dialog>
 
     <dialog
@@ -399,6 +422,11 @@ export function mount(root) {
     manageClose: root.querySelector('#manage-lists-close'),
     manageBody: root.querySelector('#manage-lists-body'),
     manageStatus: root.querySelector('#manage-lists-status'),
+    historyDialog: root.querySelector('#history-dialog'),
+    historyClose: root.querySelector('#history-close'),
+    historyTitle: root.querySelector('#history-title'),
+    historyBody: root.querySelector('#history-body'),
+    historyStatus: root.querySelector('#history-status'),
     aisleOrderDialog: root.querySelector('#aisle-order-dialog'),
     aisleOrderTitle: root.querySelector('#aisle-order-title'),
     aisleOrderList: root.querySelector('#aisle-order-list'),
@@ -460,6 +488,7 @@ export function mount(root) {
     applySelectionMode();
     if (refs.manageDialog.open) renderManageLists();
     if (refs.aisleOrderDialog.open) renderAisleOrder();
+    if (refs.historyDialog.open) renderHistory();
   }
 
   function endSelection() {
@@ -855,6 +884,15 @@ export function mount(root) {
                   {
                     class: 'btn manage-btn',
                     type: 'button',
+                    dataset: { action: 'history', listId: list.id },
+                  },
+                  'History'
+                ),
+                h(
+                  'button',
+                  {
+                    class: 'btn manage-btn',
+                    type: 'button',
                     dataset: { action: 'aisles', listId: list.id },
                   },
                   'Aisles'
@@ -922,6 +960,15 @@ export function mount(root) {
                   {
                     class: 'btn manage-btn',
                     type: 'button',
+                    dataset: { action: 'history', listId: list.id },
+                  },
+                  'History'
+                ),
+                h(
+                  'button',
+                  {
+                    class: 'btn manage-btn',
+                    type: 'button',
                     dataset: { action: 'restore', listId: list.id },
                   },
                   'Restore'
@@ -947,6 +994,96 @@ export function mount(root) {
     }
 
     refs.manageBody.replaceChildren(...nodes);
+  }
+
+  function formatRevisionTime(iso) {
+    const date = new Date(iso);
+    return Number.isNaN(date.getTime()) ? 'Unknown time' : REVISION_TIME_FORMAT.format(date);
+  }
+
+  function revisionItemNode(item) {
+    const quantity = formatQuantity(item);
+    return h(
+      'li',
+      { class: `history-preview__item${item.checked ? ' is-checked' : ''}` },
+      h('span', { class: 'history-preview__name' }, item.name),
+      quantity ? h('span', { class: 'history-preview__qty' }, quantity) : null
+    );
+  }
+
+  function revisionNode(revision) {
+    const expanded = revision.id === expandedRevisionId;
+    const items = `${revision.itemCount} item${revision.itemCount === 1 ? '' : 's'}`;
+    const picked = revision.checkedCount ? ` · ${revision.checkedCount} picked` : '';
+
+    let preview = null;
+    if (expanded) {
+      preview = revision.items.length
+        ? h('ul', { class: 'history-preview' }, revision.items.map(revisionItemNode))
+        : h('p', { class: 'history-preview__empty' }, 'This version was an empty list.');
+    }
+
+    return h(
+      'li',
+      { class: 'history-row', dataset: { revisionId: revision.id } },
+      h(
+        'div',
+        { class: 'history-row__head' },
+        h(
+          'button',
+          {
+            class: 'history-row__toggle',
+            type: 'button',
+            dataset: { action: 'toggle', revisionId: revision.id },
+            'aria-expanded': expanded ? 'true' : 'false',
+          },
+          h('span', { class: 'history-row__time' }, formatRevisionTime(revision.savedAt)),
+          h('span', { class: 'history-row__meta' }, `${revision.label} · ${items}${picked}`)
+        ),
+        h(
+          'button',
+          {
+            class: 'btn manage-btn',
+            type: 'button',
+            dataset: { action: 'restore', revisionId: revision.id },
+          },
+          'Restore'
+        )
+      ),
+      preview
+    );
+  }
+
+  function renderHistory() {
+    const list = store
+      .getState()
+      .lists.find((entry) => entry.id === historyListId && !entry.deletedAt);
+
+    if (!list) {
+      refs.historyTitle.textContent = 'List history';
+      refs.historyBody.replaceChildren(
+        h('p', { class: 'manage-empty' }, 'That list is no longer available.')
+      );
+      return;
+    }
+
+    refs.historyTitle.textContent = `${list.name} history`;
+    const revisions = store.getListHistory(list.id);
+
+    if (!revisions.length) {
+      refs.historyBody.replaceChildren(
+        h(
+          'p',
+          { class: 'manage-empty' },
+          'No saved versions yet. One is kept automatically before you change this list.'
+        )
+      );
+      return;
+    }
+
+    refs.historyBody.replaceChildren(
+      h('ul', { class: 'history-list' }, revisions.map(revisionNode))
+    );
   }
 
   function aisleOrderFor(list) {
@@ -1236,6 +1373,25 @@ export function mount(root) {
       refs.manageStatus.textContent = '';
     },
   });
+
+  const historySheet = createSheetController(refs.historyDialog, {
+    trigger: () => refs.manageChip,
+    initialFocus: () => refs.historyBody.querySelector('button') || refs.historyClose,
+    onOpen: renderHistory,
+    onClose: () => {
+      refs.historyStatus.textContent = '';
+      expandedRevisionId = null;
+    },
+  });
+
+  refs.historyClose.addEventListener('click', () => historySheet.close());
+
+  function openHistory(listId) {
+    historyListId = listId;
+    expandedRevisionId = null;
+    manageListsSheet.close();
+    setTimeout(() => historySheet.open(), 0);
+  }
 
   const aisleOrderSheet = createSheetController(refs.aisleOrderDialog, {
     trigger: () => refs.manageChip,
@@ -1611,6 +1767,11 @@ export function mount(root) {
     const listId = button.dataset.listId;
     refs.manageStatus.textContent = '';
 
+    if (button.dataset.action === 'history') {
+      openHistory(listId);
+      return;
+    }
+
     if (button.dataset.action === 'aisles') {
       openAisleOrder(listId);
       return;
@@ -1684,6 +1845,61 @@ export function mount(root) {
         },
       });
     }
+  });
+
+  refs.historyBody.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-action]');
+    if (!button) return;
+
+    const list = store
+      .getState()
+      .lists.find((entry) => entry.id === historyListId && !entry.deletedAt);
+    if (!list) return;
+
+    const revisionId = button.dataset.revisionId;
+    const revision = store.getListHistory(list.id).find((entry) => entry.id === revisionId);
+    if (!revision) return;
+
+    if (button.dataset.action === 'toggle') {
+      expandedRevisionId = expandedRevisionId === revisionId ? null : revisionId;
+      renderHistory();
+      const toggle = refs.historyBody.querySelector(
+        `button[data-action="toggle"][data-revision-id="${revisionId}"]`
+      );
+      if (toggle) toggle.focus({ preventScroll: true });
+      return;
+    }
+
+    if (button.dataset.action !== 'restore') return;
+
+    const currentCount = store.visibleItems(list).length;
+    const when = formatRevisionTime(revision.savedAt);
+    const confirmed = window.confirm(
+      `Restore “${list.name}” to ${when}? This replaces the current ${currentCount} item${
+        currentCount === 1 ? '' : 's'
+      } with ${revision.itemCount} item${revision.itemCount === 1 ? '' : 's'}. You can undo right after.`
+    );
+    if (!confirmed) return;
+
+    const result = store.restoreListRevision(list.id, revision.id);
+    if (!result) {
+      refs.historyStatus.textContent = 'Could not restore that version.';
+      return;
+    }
+
+    expandedRevisionId = null;
+    refs.historyStatus.textContent = '';
+    renderHistory();
+
+    showToast(`Restored ${list.name} to ${when}.`, {
+      duration: 6000,
+      actionLabel: 'Undo',
+      onAction: () => {
+        if (!result.undoRevisionId) return;
+        const undone = store.restoreListRevision(list.id, result.undoRevisionId);
+        showToast(undone ? 'Restored the version from before.' : 'Could not undo the restore.');
+      },
+    });
   });
 
   /* ---------- Aisle order ---------- */
@@ -1884,6 +2100,7 @@ export function mount(root) {
     newListSheet.destroy();
     manageListsSheet.destroy();
     aisleOrderSheet.destroy();
+    historySheet.destroy();
     moveSheet.destroy();
     calendarSheet.destroy();
     document.body.classList.remove('has-add-dock');

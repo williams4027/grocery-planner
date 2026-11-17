@@ -12,9 +12,9 @@ sync between two phones. Hosted free on GitHub Pages.
 
 **Status:** Phases 0–6 implemented, plus per-store lists, Google Calendar trip export, recipe
 ordering/duplication, a continuous meal plan, a future-meal ideas page, JSON backup/restore, bulk list
-actions, alphabetical aisle sorting, a Google Drive backup search shortcut, factory reset to
-seeded data, a double-tap zoom guard, rotating heart-filled acknowledgements, and optional
-end-to-end encrypted two-phone sync.
+actions, alphabetical aisle sorting, device-local list version history with restore, a Google Drive
+backup search shortcut, factory reset to seeded data, a double-tap zoom guard, rotating heart-filled
+acknowledgements, and optional end-to-end encrypted two-phone sync.
 
 ---
 
@@ -72,7 +72,7 @@ end-to-end encrypted two-phone sync.
    Costco, and custom lists.
 3. `#/recipes` — recipe list, search/filter, detail, add-to-list, and create form.
 4. `#/ideas` — free-form notes for future-week meal ideas.
-5. `#/list` → **Manage lists** sheet — create, duplicate, archive, and restore lists.
+5. `#/list` → **Manage lists** sheet — create, duplicate, view saved versions, archive, and restore lists.
 6. `#/more` — build info, backup/restore, install help, roadmap, data counts. Linked from the top
    right of the header.
 

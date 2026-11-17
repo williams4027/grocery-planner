@@ -1939,6 +1939,8 @@ body.sheet-open {
 .manage-row__actions {
   display: flex;
   flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -1966,6 +1968,114 @@ body.sheet-open {
   color: var(--muted);
   font-size: 13px;
   text-align: center;
+}
+
+/* ---------- List history ---------- */
+
+.history-intro {
+  margin: 0 0 12px;
+}
+
+.history-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history-row {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.history-row__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
+}
+
+.history-row__toggle {
+  display: grid;
+  gap: 2px;
+  flex: 1 1 150px;
+  min-width: 0;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.history-row__time {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.history-row__time::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  transition: transform 140ms ease;
+}
+
+.history-row__toggle[aria-expanded='true'] .history-row__time::before {
+  transform: rotate(90deg);
+}
+
+.history-row__meta {
+  color: var(--muted);
+  font-size: 12px;
+  padding-left: 17px;
+}
+
+.history-preview {
+  margin: 0;
+  padding: 6px 12px 12px;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+
+.history-preview__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 13px;
+}
+
+.history-preview__name {
+  overflow-wrap: anywhere;
+}
+
+.history-preview__item.is-checked .history-preview__name {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.history-preview__qty {
+  flex: none;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.history-preview__empty {
+  margin: 0;
+  padding: 4px 12px 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .aisle-order-intro {
